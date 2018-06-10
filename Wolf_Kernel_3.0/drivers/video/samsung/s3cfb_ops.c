@@ -31,7 +31,7 @@
 #include "s3cfb.h"
 
 #include <plat/cpu.h>
-#include "iTop-4412.h"
+#include "TC4_Logo_640_480.h"
 #define NOT_DEFAULT_WINDOW 99
 #define CMA_REGION_FIMD 	"fimd"
 #ifdef CONFIG_EXYNOS4_CONTENT_PATH_PROTECTION
@@ -48,33 +48,6 @@ struct s3c_platform_fb *to_fb_plat(struct device *dev)
 }
 
 #ifndef CONFIG_FRAMEBUFFER_CONSOLE
-/* add by cym 20140520 */
-int lcd_size = 97;
-
-extern int get_lcd_type();
-#if 0
-static int __init setup_lcd_size(char *str)
-{
-        if (!strncasecmp("9.7", str, 3)) {
-                printk("000000000000000000000000\n");
-                //ft5x0x_pdata.screen_max_x = 768;
-                //ft5x0x_pdata.screen_max_y = 1024;
-                lcd_size = 97;
-        }
-        else if(!strncasecmp("7.0", str, 3))
-        {
-                printk("1111111111111111111111111\n");
-                //ft5x0x_pdata.screen_max_x = 1280;//1280;
-                //ft5x0x_pdata.screen_max_y = 800;//800;
-                lcd_size = 70;
-        }
-
-        //printk("%s\n", __FUNCTION__);
-}
-early_param("lcd", setup_lcd_size);
-#endif
-
-/* end add */
 int s3cfb_draw_logo(struct fb_info *fb)
 {
 #ifdef CONFIG_FB_S5P_SPLASH_SCREEN
@@ -92,7 +65,6 @@ int s3cfb_draw_logo(struct fb_info *fb)
 	u32 top,left;
 	const unsigned char *pLog =NULL;
 
-	int type;
 
 	memset(fb->screen_base, 0x00, var->yres * line);
 	printk("\n CPU type: \n");
@@ -104,35 +76,12 @@ int s3cfb_draw_logo(struct fb_info *fb)
 		pLog = iBitmapData;
 	}
 
-	type = get_lcd_type();
-
-	if(0x00 == type)        //9.7
-        {
-		lcd_size = 97;
-        }
-        else if(0x01 == type)   //7.0
-        {
-		lcd_size = 70;
-        }
-        else if(0x02 == type)   //4.3
-        {
-                lcd_size = 43;
-        }
-
-	if(lcd_size != 70)
-	{
-		top = 170;
-		left = 230;
-	}
-	else
-	{
-		top = 400;
-		left = 110;
-	}
+	
+	//pLog = iBitmapData;
+	top = 240;
+	left = 460;
 		
 	index = 0;
-	
-	if(lcd_size != 43){
 	for (i = 0; i < 480; i++) {
 		for (j = 0; j < 640; j++) {
 			memset(fb->screen_base + (i + top) * line + (j + left) * 4 + 0, pLog[index], 1);//B
@@ -141,7 +90,6 @@ int s3cfb_draw_logo(struct fb_info *fb)
 			memset(fb->screen_base + (i + top) * line + (j + left) * 4 + 3, 0x00, 1);
 			index += 3;
 		}
-	}
 	}
 	
 #endif

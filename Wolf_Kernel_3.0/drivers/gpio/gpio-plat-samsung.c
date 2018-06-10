@@ -23,10 +23,6 @@
 #include <plat/gpio-cfg.h>
 #include <plat/gpio-cfg-helpers.h>
 
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-#include <linux/module.h>
-#endif
-
 #ifndef DEBUG_GPIO
 #define gpio_dbg(x...) do { } while (0)
 #else
@@ -69,13 +65,8 @@ static int samsung_gpiolib_4bit_input(struct gpio_chip *chip,
 	return 0;
 }
 
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-int samsung_gpiolib_4bit_output(struct gpio_chip *chip,
-				       unsigned int offset, int value)
-#else
 static int samsung_gpiolib_4bit_output(struct gpio_chip *chip,
 				       unsigned int offset, int value)
-#endif
 {
 	struct s3c_gpio_chip *ourchip = to_s3c_gpio(chip);
 	void __iomem *base = ourchip->base;
@@ -106,10 +97,6 @@ static int samsung_gpiolib_4bit_output(struct gpio_chip *chip,
 
 	return 0;
 }
-
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-EXPORT_SYMBOL(samsung_gpiolib_4bit_output);
-#endif
 
 /* The next set of routines are for the case where the GPIO configuration
  * registers are 4 bits per GPIO but there is more than one register (the

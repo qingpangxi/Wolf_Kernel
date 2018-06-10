@@ -47,21 +47,12 @@
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
 #include <linux/list.h>
-#ifdef CONFIG_HAS_WAKELOCK
-#include <linux/wakelock.h>
-#endif
-#include <linux/gpio.h>
 
 #include "cdc-acm.h"
-#include <linux/modemctl.h>
-#include <mach/modem.h>
 
 
 #define DRIVER_AUTHOR "Armin Fuerst, Pavel Machek, Johannes Erdfelt, Vojtech Pavlik, David Kubicek, Johan Hovold"
 #define DRIVER_DESC "USB Abstract Control Model driver for USB modems and ISDN adapters"
-
-
-
 
 static struct usb_driver acm_driver;
 static struct tty_driver *acm_tty_driver;
@@ -73,95 +64,6 @@ static DEFINE_MUTEX(open_mutex);
 
 static const struct tty_port_operations acm_port_ops = {
 };
-struct acm share_acm;
-#ifdef CONFIG_HAS_WAKELOCK
-enum {
-	ACM_WLOCK_RUNTIME,
-	ACM_WLOCK_DORMANCY,
-} ACM_WLOCK_TYPE;
-
-#define ACM_DEFAULT_WAKE_TIME (6*HZ)
-#define ACM_SUSPEND_UNLOCK_DELAY msecs_to_jiffies(200)//(5*HZ)
-
-static inline void acm_wake_lock_init(struct acm *acm)
-{
-	wake_lock_init(&acm->pm_lock, WAKE_LOCK_SUSPEND, "cdc-acm");
-	wake_lock_init(&acm->dormancy_lock, WAKE_LOCK_SUSPEND, "acm-dormancy");
-	acm->wake_time = ACM_DEFAULT_WAKE_TIME;
-}
-
-static inline void acm_wake_lock_destroy(struct acm *acm)
-{
-	wake_lock_destroy(&acm->pm_lock);
-	wake_lock_destroy(&acm->dormancy_lock);
-}
-
-static inline void _wake_lock(struct acm *acm, int type)
-{
-	if (acm->usb_connected)
-		switch (type) {
-		case ACM_WLOCK_DORMANCY:
-			wake_lock(&acm->dormancy_lock);
-			break;
-		case ACM_WLOCK_RUNTIME:
-		default:
-			wake_lock(&acm->pm_lock);
-			break;
-		}
-}
-
-static inline void _wake_unlock(struct acm *acm, int type)
-{
-	if (acm)
-		switch (type) {
-		case ACM_WLOCK_DORMANCY:
-			wake_unlock(&acm->dormancy_lock);
-			break;
-		case ACM_WLOCK_RUNTIME:
-		default:
-			wake_unlock(&acm->pm_lock);
-			break;
-		}
-}
-
-static inline void _wake_lock_timeout(struct acm *acm, int type)
-{
-	switch (type) {
-	case ACM_WLOCK_DORMANCY:
-		wake_lock_timeout(&acm->dormancy_lock, acm->wake_time);
-		break;
-	case ACM_WLOCK_RUNTIME:
-	default:
-		wake_lock_timeout(&acm->pm_lock, ACM_SUSPEND_UNLOCK_DELAY);
-	}
-}
-
-static inline void _wake_lock_settime(struct acm *acm, long time)
-{
-	if (acm)
-		acm->wake_time = time;
-}
-
-static inline long _wake_lock_gettime(struct acm *acm)
-{
-	return acm ? acm->wake_time : ACM_DEFAULT_WAKE_TIME;
-}
-#else
-#define _wake_lock_init(acm) do { } while (0)
-#define _wake_lock_destroy(acm) do { } while (0)
-#define _wake_lock(acm, type) do { } while (0)
-#define _wake_unlock(acm, type) do { } while (0)
-#define _wake_lock_timeout(acm, type) do { } while (0)
-#define _wake_lock_settime(acm, time) do { } while (0)
-#define _wake_lock_gettime(acm) (0)
-#endif
-
-#define wake_lock_pm(acm)	_wake_lock(acm, ACM_WLOCK_RUNTIME)
-#define wake_lock_data(acm)	_wake_lock(acm, ACM_WLOCK_DORMANCY)
-#define wake_unlock_pm(acm)	_wake_unlock(acm, ACM_WLOCK_RUNTIME)
-#define wake_unlock_data(acm)	_wake_unlock(acm, ACM_WLOCK_DORMANCY)
-#define wake_lock_timeout_pm(acm) _wake_lock_timeout(acm, ACM_WLOCK_RUNTIME)
-#define wake_lock_timeout_data(acm) _wake_lock_timeout(acm, ACM_WLOCK_DORMANCY)
 
 /*
  * Functions for ACM control messages.
@@ -190,25 +92,6 @@ static int acm_ctrl_msg(struct acm *acm, int request, int value,
 #define acm_send_break(acm, ms) \
 	acm_ctrl_msg(acm, USB_CDC_REQ_SEND_BREAK, ms, NULL, 0)
 
-static int acm_net_wb_alloc(struct acm *acm)
-{
-	int i, wbn;
-	struct acm_wb *wb;
-
-	wbn = 0;
-	i = 0;
-	for (;;) {
-		wb = &acm->wb[wbn];
-		if ((wb->use)&&(wb->submitted!=1)) {
-			wb->submitted = 1;
-			return wbn;
-		}
-		wbn = (wbn + 1) % ACM_NW;
-		if (++i >= ACM_NW)
-			return -1;
-	}
-}
-
 /*
  * Write buffer management.
  * All of these assume proper locks taken by the caller.
@@ -225,7 +108,6 @@ static int acm_wb_alloc(struct acm *acm)
 		wb = &acm->wb[wbn];
 		if (!wb->use) {
 			wb->use = 1;
-			wb->submitted = 0;
 			return wbn;
 		}
 		wbn = (wbn + 1) % ACM_NW;
@@ -283,168 +165,12 @@ static int acm_start_wb(struct acm *acm, struct acm_wb *wb)
 	}
 	return rc;
 }
-static int acm_initiated_resume(struct acm *acm)
-	{
-		int err;
-		struct usb_device *udev = acm->dev;
-		struct acm *parent_acm; 
-		//printk("%s: DPM resume\n", __func__);
-		if (udev) {
-			struct device *dev = &udev->dev;
-			int spin = 10, spin2 = 30;
-			int host_wakeup_done = 0;
-			int _host_high_cnt = 0, _host_timeout_cnt = 0;
-			parent_acm = acm->parent;
-			//printk("[XJ]dev->power.runtime_status: %d\n", dev->power.runtime_status);
-	retry:
-			switch (dev->power.runtime_status) {
-			case RPM_SUSPENDED:
-				if (parent_acm->dpm_suspending || host_wakeup_done) {
-					dev_info(&udev->dev,
-						"DPM Suspending, spin:%d\n", spin2);
-					if (spin2-- == 0) {
-						dev_err(&udev->dev,
-						"dpm resume timeout\n");
-						return -ETIMEDOUT;
-					}
-					msleep(30);
-					goto retry;
-				}
-				/* add by cym 20130423 */
-#ifdef CONFIG_SMM6260_MODEM
-				err = mc_prepare_resume(500);
-				switch (err) {
-				case MC_SUCCESS:
-					host_wakeup_done = 1;
-					_host_timeout_cnt = 0;
-					_host_high_cnt = 0;
-					goto retry; /*wait until RPM_ACTIVE states*/
-	
-				case MC_HOST_TIMEOUT:
-					_host_timeout_cnt++;
-					break;
-	
-				case MC_HOST_HIGH:
-					_host_high_cnt++;
-					break;
-				case MC_CP_RESET:
-					printk("CP reset,skip wakeup CP!\n");
-					return -EIO;
-				}
-#endif
-				/* end add */
-				if (spin2-- == 0) {
-					dev_info(&udev->dev,
-					"svn initiated resume, RPM_SUSPEND timeout\n");
-					/* add by cym 20130423 */
-#ifdef CONFIG_SMM6260_MODEM
-					crash_event(0);   //MODEM_EVENT_RESET
-#endif
-					/* end add */
-					return -ETIMEDOUT;
-				}
-				msleep(20);
-				goto retry;
-	
-			case RPM_SUSPENDING:
-				dev_info(&udev->dev,
-					"RPM Suspending, spin:%d\n", spin);
-				if (spin-- == 0) {
-					dev_err(&udev->dev,
-					"Modem suspending timeout\n");
-					return -ETIMEDOUT;
-				}
-				msleep(100);
-				goto retry;
-			case RPM_RESUMING:
-				dev_info(&udev->dev,
-					"RPM Resuming, spin:%d\n", spin2);
-				if (spin2-- == 0) {
-					dev_err(&udev->dev,
-					"Modem resume timeout\n");
-					return -ETIMEDOUT;
-				}
-				msleep(50);
-				goto retry;
-			case RPM_ACTIVE:
-				dev_dbg(&udev->dev,
-					"RPM Active, spin:%d\n", spin2);			
-				break;
-			default:
-				dev_info(&udev->dev,
-					"RPM EIO, spin:%d\n", spin2);				
-				return -EIO;
-			}
-		}
-		return 0;
-	}
-
-
-static void acm_net_write_worker(struct work_struct *work)
-
-{
-	struct acm *acm =
-		container_of(work, struct acm, net_write_worker);
-	int wbn;
-	while(1){
-		wbn = acm_net_wb_alloc(acm);
-	//	printk("--- net 222 alloc wbn=%d\n",wbn);
-		if(wbn == -1)
-			break;
-		unsigned long flags;
-		struct acm_wb *wb = &acm->wb[wbn];
-		int rc;
-		
-		acm_initiated_resume(acm);
-
-		spin_lock_irqsave(&acm->write_lock, flags);
-		if (!acm->dev) {
-			wb->use = 0;
-			spin_unlock_irqrestore(&acm->write_lock, flags);
-			continue;
-			//goto dirrect_end;
-	//		return -ENODEV;
-		}
-
-		dev_vdbg(&acm->data->dev, "%s - susp_count %d\n", __func__,
-								acm->susp_count);
-		usb_autopm_get_interface_async(acm->control);
-		if (acm->susp_count) {
-			if (!acm->delayed_wb)
-				acm->delayed_wb = wb;
-			else
-				usb_autopm_put_interface_async(acm->control);
-			spin_unlock_irqrestore(&acm->write_lock, flags);
-			continue;
-	//		goto dirrect_end;
-	//		return 0;	/* A white lie */
-		}
-		usb_mark_last_busy(acm->dev);
-
-		rc = acm_start_wb(acm, wb);
-	//	printk("--- wb->use =%d\n",wb->use);
-	//	wb->use = 0;
-		spin_unlock_irqrestore(&acm->write_lock, flags);
-		wake_lock_timeout_data(acm->parent);
-
-	}
-
-
-//dirrect_end:
-//	return rc;
-//	if(0){
-
-//	}
-
-}
 
 static int acm_write_start(struct acm *acm, int wbn)
 {
 	unsigned long flags;
 	struct acm_wb *wb = &acm->wb[wbn];
 	int rc;
-	
-	acm_initiated_resume(acm);
 
 	spin_lock_irqsave(&acm->write_lock, flags);
 	if (!acm->dev) {
@@ -468,7 +194,6 @@ static int acm_write_start(struct acm *acm, int wbn)
 
 	rc = acm_start_wb(acm, wb);
 	spin_unlock_irqrestore(&acm->write_lock, flags);
-	wake_lock_timeout_data(acm->parent);
 
 	return rc;
 
@@ -558,7 +283,7 @@ static void acm_ctrl_irq(struct urb *urb)
 		tty = tty_port_tty_get(&acm->port);
 		newctrl = get_unaligned_le16(data);
 
-		if (tty && ((acm==acm_table[0])||(acm == acm_table[3]))) {
+		if (tty) {
 			if (!acm->clocal &&
 				(acm->ctrlin & ~newctrl & ACM_CTRL_DCD)) {
 				dev_dbg(&acm->control->dev,
@@ -607,7 +332,6 @@ static int acm_submit_read_urb(struct acm *acm, int index, gfp_t mem_flags)
 		return 0;
 
 	dev_vdbg(&acm->data->dev, "%s - urb %d\n", __func__, index);
-//	dev_err(&acm->data->dev, "---%s(): - urb %d\n", __func__, index);
 
 	res = usb_submit_urb(acm->read_urbs[index], mem_flags);
 	if (res) {
@@ -662,8 +386,6 @@ static void acm_read_bulk_callback(struct urb *urb)
 
 	dev_vdbg(&acm->data->dev, "%s - urb %d, len %d\n", __func__,
 					rb->index, urb->actual_length);
-//	dev_err(&acm->data->dev, "---%s(): - urb %d, len %d\n", __func__,
-//					rb->index, urb->actual_length);
 	set_bit(rb->index, &acm->read_urbs_free);
 
 	if (!acm->dev) {
@@ -671,7 +393,6 @@ static void acm_read_bulk_callback(struct urb *urb)
 		return;
 	}
 	usb_mark_last_busy(acm->dev);
-	wake_lock_timeout_data(acm->parent);
 
 	if (urb->status) {
 		dev_dbg(&acm->data->dev, "%s - non-zero urb status: %d\n",
@@ -746,8 +467,6 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 		rv = 0;
 
 	dev_dbg(&acm->control->dev, "%s\n", __func__);
-	
-	acm_initiated_resume(acm);
 
 	set_bit(TTY_NO_WRITE_SPLIT, &tty->flags);
 
@@ -757,7 +476,7 @@ static int acm_tty_open(struct tty_struct *tty, struct file *filp)
 	if (usb_autopm_get_interface(acm->control) < 0)
 		goto early_bail;
 	else
-		acm->control->needs_remote_wakeup = 0;//1;
+		acm->control->needs_remote_wakeup = 1;
 
 	mutex_lock(&acm->mutex);
 	if (acm->port.count++) {
@@ -805,10 +524,7 @@ static void acm_tty_unregister(struct acm *acm)
 	int i;
 
 	tty_unregister_device(acm_tty_driver, acm->minor);
-        //avoiding ttyACM1 duplicated name error
-        printk("---%s(): acm->minor=%d\n", __func__, acm->minor);
-        acm_tty_driver->ttys[acm->minor] = NULL;
-        usb_put_intf(acm->control);
+	usb_put_intf(acm->control);
 	acm_table[acm->minor] = NULL;
 	usb_free_urb(acm->ctrlurb);
 	for (i = 0; i < ACM_NW; i++)
@@ -870,7 +586,6 @@ static void acm_tty_close(struct tty_struct *tty, struct file *filp)
 	mutex_unlock(&open_mutex);
 }
 
-
 static int acm_tty_write(struct tty_struct *tty,
 					const unsigned char *buf, int count)
 {
@@ -899,28 +614,9 @@ static int acm_tty_write(struct tty_struct *tty,
 	dev_vdbg(&acm->data->dev, "%s - write %d\n", __func__, count);
 	memcpy(wb->buf, buf, count);
 	wb->len = count;
-		if(count%512 == 0){
-			wb->urb->transfer_flags |= URB_ZERO_PACKET;
-		}
-		else
-			wb->urb->transfer_flags &= ~URB_ZERO_PACKET;
 	spin_unlock_irqrestore(&acm->write_lock, flags);
-	
-	wake_lock_pm(acm->parent);
-	//printk("\n--- acm=0x%x, table0=0x%x\n",acm,acm_table[0]);
-	if((acm == acm_table[0])||(acm == acm_table[3])){
-	//	printk("--- acm_tty_write(): case for tty write \n");
-		stat = acm_write_start(acm, wbn);
-	}
-	else{
-//		printk("\n--- acm_tty_write(): case for net write \n");	
-//		schedule_work(&acm->net_write_worker);
-		if(!work_pending(&acm->net_write_worker))
-			queue_work(acm->tx_workqueue, &acm->net_write_worker);
 
-	}
-	
-	
+	stat = acm_write_start(acm, wbn);
 	if (stat < 0)
 		return stat;
 	return count;
@@ -1139,30 +835,6 @@ static int acm_write_buffers_alloc(struct acm *acm)
 	return 0;
 }
 
-static void acm_runtime_start(struct work_struct *work)
-{
-	struct acm *acm =
-		container_of(work, struct acm, pm_runtime_work.work);
-	struct device *dev, *ppdev;
-
-	dev = &acm->dev->dev;
-	if (acm->dev && dev->parent) {
-		ppdev = dev->parent->parent;
-		/*enable runtime feature - once after boot*/
-		dev_info(dev, "ACM Runtime PM Start!!\n");
-		//usb_enable_autosuspend(acm->dev);
-		//pm_runtime_allow(dev);
-		
-		pm_runtime_allow(ppdev); /*ehci*/
-	}
-}
-//extern void pm_runtime_set_autosuspend_delay(struct device *dev, int delay);
-/* add by cym 20130423 */
-#ifdef CONFIG_SMM6260_MODEM
-extern struct modemctl *global_mc;
-#endif
-/* end add */
-
 static int acm_probe(struct usb_interface *intf,
 		     const struct usb_device_id *id)
 {
@@ -1176,7 +848,6 @@ static int acm_probe(struct usb_interface *intf,
 	struct usb_endpoint_descriptor *epread = NULL;
 	struct usb_endpoint_descriptor *epwrite = NULL;
 	struct usb_device *usb_dev = interface_to_usbdev(intf);
-	struct usb_device *root_usbdev= to_usb_device(intf->dev.parent->parent);
 	struct acm *acm;
 	int minor;
 	int ctrlsize, readsize;
@@ -1189,8 +860,7 @@ static int acm_probe(struct usb_interface *intf,
 	int num_rx_buf;
 	int i;
 	int combined_interfaces = 0;
-	
-	//dump_stack();
+
 	/* normal quirks */
 	quirks = (unsigned long)id->driver_info;
 	num_rx_buf = (quirks == SINGLE_RX_URB) ? 1 : ACM_NR;
@@ -1392,9 +1062,9 @@ made_compressed_probe:
 
 	ctrlsize = le16_to_cpu(epctrl->wMaxPacketSize);
 	readsize = le16_to_cpu(epread->wMaxPacketSize) *
-				(quirks == SINGLE_RX_URB ? 1 : 64);
+				(quirks == SINGLE_RX_URB ? 1 : 2);
 	acm->combined_interfaces = combined_interfaces;
-	acm->writesize = le16_to_cpu(epwrite->wMaxPacketSize) * 64;
+	acm->writesize = le16_to_cpu(epwrite->wMaxPacketSize) * 20;
 	acm->control = control_interface;
 	acm->data = data_interface;
 	acm->minor = minor;
@@ -1406,8 +1076,6 @@ made_compressed_probe:
 	acm->readsize = readsize;
 	acm->rx_buflimit = num_rx_buf;
 	INIT_WORK(&acm->work, acm_softint);
-	INIT_WORK(&acm->net_write_worker, acm_net_write_worker);
-	acm->tx_workqueue = create_singlethread_workqueue("acm_txq");
 	spin_lock_init(&acm->write_lock);
 	spin_lock_init(&acm->read_lock);
 	mutex_init(&acm->mutex);
@@ -1417,10 +1085,6 @@ made_compressed_probe:
 		acm->bInterval = epread->bInterval;
 	tty_port_init(&acm->port);
 	acm->port.ops = &acm_port_ops;
-
-	pm_runtime_set_autosuspend_delay(&usb_dev->dev,200);
-//	usb_dev->autosuspend_delay = msecs_to_jiffies(20000);      /* 200ms */
-//	root_usbdev->autosuspend_delay = msecs_to_jiffies(20000); // 400 is temporary value
 
 	buf = usb_alloc_coherent(usb_dev, ctrlsize, GFP_KERNEL, &acm->ctrl_dma);
 	if (!buf) {
@@ -1554,32 +1218,8 @@ skip_countries:
 	usb_get_intf(control_interface);
 	tty_register_device(acm_tty_driver, minor, &control_interface->dev);
 
-	usb_enable_autosuspend(acm->dev);
-	INIT_DELAYED_WORK(&acm->pm_runtime_work, acm_runtime_start);
-	share_acm.usb_connected = 1;
-	acm->parent = &share_acm;
-
 	acm_table[minor] = acm;
-	
-	if(minor==ACM_TTY_MINORS-1){
-		schedule_delayed_work(&acm->pm_runtime_work, msecs_to_jiffies(500));
-		/* add by cym 20130423 */
-#ifdef CONFIG_SMM6260_MODEM
-		if((global_mc)&&(global_mc->boot_done==1)){
-			if(global_mc->gCdcAcmSimpleEnumeratinoState==1){
-				printk("---%s(): not the first time cdc acm simple enum over\n",__FUNCTION__);
-				printk("---%s(): report for the reset and enumeration over\n",__FUNCTION__);
-				crash_event(4);		//MODEM_EVENT_RESET_DONE   xujie
-			}
-			else{
-				global_mc->gCdcAcmSimpleEnumeratinoState=1;
-				printk("---%s(): the first time cdc acm simple enum over\n",__FUNCTION__);
-			}
 
-		}	
-#endif
-		/* end add */
-	}
 	return 0;
 alloc_fail7:
 	for (i = 0; i < ACM_NW; i++)
@@ -1619,7 +1259,7 @@ static void acm_disconnect(struct usb_interface *intf)
 	struct acm *acm = usb_get_intfdata(intf);
 	struct usb_device *usb_dev = interface_to_usbdev(intf);
 	struct tty_struct *tty;
-	//printk("\n\n &&&&& acm_disconnect interface &&&&&\n\n");
+
 	/* sibling interface is already cleaning up */
 	if (!acm)
 		return;
@@ -1646,13 +1286,6 @@ static void acm_disconnect(struct usb_interface *intf)
 	if (!acm->combined_interfaces)
 		usb_driver_release_interface(&acm_driver, intf == acm->control ?
 					acm->data : acm->control);
-	
-	wake_unlock_pm(acm->parent);
-	acm_table[acm->minor] = NULL;
-	share_acm.usb_connected = 0;
-	share_acm.resume_debug = 0;
-	share_acm.dpm_suspending = 0;
-	share_acm.skip_hostwakeup = 0;
 
 	if (acm->port.count == 0) {
 		acm_tty_unregister(acm);
@@ -1673,14 +1306,6 @@ static int acm_suspend(struct usb_interface *intf, pm_message_t message)
 {
 	struct acm *acm = usb_get_intfdata(intf);
 	int cnt;
-        
-	if(acm->suspended==1)
-		return 0;
-	
-	//gpio_set_value(GPIO_XUJIE_MONITOR, 0);    //xujie test monitor
-	//gpio_set_value(GPIO_XUJIE_MONITOR, 1);
-	acm->suspended=1;
-	wake_lock_timeout_pm(acm->parent);	
 
 	if (message.event & PM_EVENT_AUTO) {
 		int b;
@@ -1710,7 +1335,6 @@ static int acm_suspend(struct usb_interface *intf, pm_message_t message)
 		stop_data_traffic(acm);
 
 	mutex_unlock(&acm->mutex);
-	//gpio_set_value(GPIO_XUJIE_MONITOR, 0);
 	return 0;
 }
 
@@ -1721,11 +1345,6 @@ static int acm_resume(struct usb_interface *intf)
 	int rv = 0;
 	int cnt;
 
-	if (!acm->suspended)
-		return 0;
-
-	acm->suspended=0;
-	wake_lock_pm(acm->parent);
 	spin_lock_irq(&acm->read_lock);
 	acm->susp_count -= 1;
 	cnt = acm->susp_count;
@@ -1772,8 +1391,8 @@ static int acm_reset_resume(struct usb_interface *intf)
 	if (acm->port.count) {
 		tty = tty_port_tty_get(&acm->port);
 		if (tty) {
-		//	tty_hangup(tty);
-		//	tty_kref_put(tty);
+			tty_hangup(tty);
+			tty_kref_put(tty);
 		}
 	}
 	mutex_unlock(&acm->mutex);
@@ -1848,6 +1467,16 @@ static const struct usb_device_id acm_ids[] = {
 	},
 	{ USB_DEVICE(0x22b8, 0x6425), /* Motorola MOTOMAGX phones */
 	},
+	/* Motorola H24 HSPA module: */
+	{ USB_DEVICE(0x22b8, 0x2d91) }, /* modem                                */
+	{ USB_DEVICE(0x22b8, 0x2d92) }, /* modem           + diagnostics        */
+	{ USB_DEVICE(0x22b8, 0x2d93) }, /* modem + AT port                      */
+	{ USB_DEVICE(0x22b8, 0x2d95) }, /* modem + AT port + diagnostics        */
+	{ USB_DEVICE(0x22b8, 0x2d96) }, /* modem                         + NMEA */
+	{ USB_DEVICE(0x22b8, 0x2d97) }, /* modem           + diagnostics + NMEA */
+	{ USB_DEVICE(0x22b8, 0x2d99) }, /* modem + AT port               + NMEA */
+	{ USB_DEVICE(0x22b8, 0x2d9a) }, /* modem + AT port + diagnostics + NMEA */
+
 	{ USB_DEVICE(0x0572, 0x1329), /* Hummingbird huc56s (Conexant) */
 	.driver_info = NO_UNION_NORMAL, /* union descriptor misplaced on
 					   data interface instead of
@@ -1925,21 +1554,11 @@ static const struct usb_device_id acm_ids[] = {
 	{ NOKIA_PCSUITE_ACM_INFO(0x0335), }, /* Nokia E7 */
 	{ NOKIA_PCSUITE_ACM_INFO(0x03cd), }, /* Nokia C7 */
 	{ SAMSUNG_PCSUITE_ACM_INFO(0x6651), }, /* Samsung GTi8510 (INNOV8) */
-#if 0//shengliang
+#if 1//shengliang
 	{ INTEL_BOOTROM_ACM_INFO(0x0041),},/*intel xmm6260 bootrom hsic device*/
-	{ INTEL_PCSUITE_ACM_INFO(0x0020),
-		.driver_info = NO_UNION_NORMAL,/*wjp only bind driver for hisc0*/
-		},/*intel xmm6260 main hsic device*/
+	{ INTEL_PCSUITE_ACM_INFO(0x0020),},/*intel xmm6260 main hsic device*/
 #endif
-//wjp
-	{ //USB_DEVICE_AND_INTERFACE_INFO(0x01519, 0x0020, USB_CLASS_COMM, USB_CDC_SUBCLASS_ACM, USB_CDC_ACM_PROTO_VENDOR),
-			.match_flags = USB_DEVICE_ID_MATCH_DEVICE | USB_DEVICE_ID_MATCH_INT_CLASS | USB_DEVICE_ID_MATCH_INT_SUBCLASS,
-			.idVendor = 0x01519,
-			.idProduct = 0x0020,
-			.bInterfaceClass = USB_CLASS_COMM, 
-			.bInterfaceSubClass = USB_CDC_SUBCLASS_ACM, 
-//			.driver_info = NO_UNION_NORMAL /* has no union descriptor */
-		},
+
 	/* Support for Owen devices */
 	{ USB_DEVICE(0x03eb, 0x0030), }, /* Owen SI30 */
 
@@ -2012,125 +1631,6 @@ static const struct tty_operations acm_ops = {
 	.tiocmget =		acm_tty_tiocmget,
 	.tiocmset =		acm_tty_tiocmset,
 };
-#define ACM_CONNECTED(acm)	(acm && acm->dev)
-#ifdef CONFIG_PM_RUNTIME
-int acm_request_resume(void)
-{
-	struct acm *acm=acm_table[0];
-	struct acm *parent_acm;
-	struct device *dev;
-	int err=0;
-
-	if (!ACM_CONNECTED(acm))
-		return 0;
-
-	parent_acm = acm->parent;
-	dev = &acm->dev->dev;
-
-	if (parent_acm->dpm_suspending) {
-		parent_acm->skip_hostwakeup = 1;
-		dev_dbg(dev,  "%s: suspending skip host wakeup\n",
-			__func__);
-		return 0;
-	}
-	
-	usb_mark_last_busy(acm->dev);
-
-	if (parent_acm->resume_debug >= 1) {
-		dev_dbg(dev,  "%s: resumeing, return\n", __func__);
-		return 0;
-	}
-
-/* add by cym 20130423 */
-#if 1
-#ifdef CONFIG_SMM6260_MODEM
-/* end add */
-/* remove by cym 20130423 */
-#if 0
-	if (dev->power.status != DPM_OFF) {
-#endif
-/* end remove */
-		wake_lock_pm(parent_acm);
-		dev_info(dev, "%s:run time resume\n", __func__);
-		parent_acm->resume_debug = 1;
-		err = pm_runtime_resume(dev);
-		if (!err && dev->power.timer_expires == 0
-			&& dev->power.request_pending == false) {
-			dev_dbg(dev, "%s:run time idle\n", __func__);
-			pm_runtime_idle(dev);
-		}
-		parent_acm->resume_debug = 0;
-/* remove by cym 20130423 */
-#if 0
-	}
-#endif
-/* end remove */
-/* add by cym 20130423 */
-#endif
-#endif
-/* end add */
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(acm_request_resume);
-#endif
-
-
-
-/*check the acm interface driver status after resume*/
-static void acm_post_resume_work(struct work_struct *work)
-{
-	struct acm *acm=acm_table[0];
-	struct acm *parent_acm =
-		container_of(work, struct acm, post_resume_work);
-	struct device *dev;
-	int spin = 10;
-	int err;
-
-	if (!ACM_CONNECTED(acm))
-		return;
-	dev = &acm->dev->dev;
-	if (parent_acm->skip_hostwakeup 
-		/* add by cym 20130423 */
-#ifdef CONFIG_SMM6260_MODEM
-		&& smm6260_is_host_wakeup()
-#endif
-		/* end add */
-	) {
-		/*remove by cym 20130423 */
-#if 0
-		dev_info(dev,
-			"post resume host skip=%d, host gpio=%d, rpm_stat=%d",
-			parent_acm->skip_hostwakeup, smm6260_is_host_wakeup(),
-			dev->power.runtime_status);
-#endif
-		/* end remove */
-retry:
-		switch (dev->power.runtime_status) {
-		case RPM_SUSPENDED:
-			parent_acm->resume_debug = 1;
-			err = pm_runtime_resume(dev);
-			if (!err && dev->power.timer_expires == 0
-				&& dev->power.request_pending == false) {
-				dev_dbg(dev, "%s:run time idle\n",  __func__);
-				pm_runtime_idle(dev);
-			}
-			parent_acm->resume_debug = 0;
-			break;
-		case RPM_SUSPENDING:
-			if (spin--) {
-				dev_err(dev, "usbsvn suspending when resum spin=%d\n", spin);
-				msleep(20);
-				goto retry;
-			}
-		case RPM_RESUMING:
-		case RPM_ACTIVE:
-			break;
-		}
-		parent_acm->skip_hostwakeup = 0;
-	}
-}
-
 
 /*
  * Init / exit.
@@ -2160,15 +1660,6 @@ static int __init acm_init(void)
 		put_tty_driver(acm_tty_driver);
 		return retval;
 	}
-#ifdef CONFIG_HAS_WAKELOCK	
-	acm_wake_lock_init(&share_acm);
-#endif
-	share_acm.resume_debug = 0;
-	share_acm.dpm_suspending = 0;
-	share_acm.skip_hostwakeup = 0;
-	share_acm.usb_connected = 0;
-	share_acm.parent = NULL;
-	INIT_WORK(&share_acm.post_resume_work, acm_post_resume_work);
 
 	retval = usb_register(&acm_driver);
 	if (retval) {
@@ -2187,10 +1678,6 @@ static void __exit acm_exit(void)
 	usb_deregister(&acm_driver);
 	tty_unregister_driver(acm_tty_driver);
 	put_tty_driver(acm_tty_driver);
-	
-	wake_unlock_pm(&share_acm);
-	acm_wake_lock_destroy(&share_acm);	
-
 }
 
 module_init(acm_init);

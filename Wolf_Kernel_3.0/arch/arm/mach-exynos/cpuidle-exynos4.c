@@ -287,6 +287,7 @@ static int exynos4_check_operation(void)
 	if (exynos4_check_usb_op())
 		return 1;
 #endif
+
 	return 0;
 }
 
@@ -637,25 +638,6 @@ static int exynos4_check_entermode(void)
 	return ret;
 }
 
-static int exynos4_is_hsic_suspended(void)
-{
-	u32 suspended;
-
-	suspended = readl(EXYNOS4_PHYPWR) & EXYNOS4212_HSIC0_FORCE_SUSPEND;
-	
-	if (suspended)
-	{
-		//printk("hsic_suspended 1");
-		return 1;
-	}
-	else
-	{
-		//printk("hsic_suspended 0");
-		return 0;  
-	}
-}
-
-
 static int exynos4_enter_lowpower(struct cpuidle_device *dev,
 				  struct cpuidle_state *state)
 {
@@ -675,7 +657,7 @@ static int exynos4_enter_lowpower(struct cpuidle_device *dev,
 		__raw_writel(tmp, S5P_CENTRAL_SEQ_OPTION);
 	}
 
-	if ((new_state == &dev->states[0]) || exynos4_is_hsic_suspended() == 0)
+	if (new_state == &dev->states[0])
 		return exynos4_enter_idle(dev, new_state);
 
 	enter_mode = exynos4_check_entermode();

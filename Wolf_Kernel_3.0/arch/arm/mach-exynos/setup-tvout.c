@@ -27,14 +27,6 @@
 #include <plat/tvout.h>
 #include <plat/cpu.h>
 
-/* add by cym 20140826 */
-#if defined(CONFIG_ARCH_EXYNOS4)
-#define HDMI_GPX(_nr)   EXYNOS4_GPX3(_nr)
-#elif defined(CONFIG_ARCH_EXYNOS5)
-#define HDMI_GPX(_nr)   EXYNOS5_GPX3(_nr)
-#endif
-/* end add */
-
 struct platform_device; /* don't need the contents */
 
 void s5p_int_src_hdmi_hpd(struct platform_device *pdev)
@@ -59,27 +51,6 @@ void s5p_cec_cfg_gpio(struct platform_device *pdev)
 	s3c_gpio_cfgpin(EXYNOS4_GPX3(6), S3C_GPIO_SFN(0x3));
 	s3c_gpio_setpull(EXYNOS4_GPX3(6), S3C_GPIO_PULL_NONE);
 }
-
-/* add by cym 20140826 */
-#ifdef CONFIG_S5P_DEV_TV
-int s5p_v4l2_hpd_read_gpio(void)
-{
-        return gpio_get_value(HDMI_GPX(7));
-}
-
-void s5p_v4l2_int_src_hdmi_hpd(void)
-{
-        s3c_gpio_cfgpin(HDMI_GPX(7), S3C_GPIO_SFN(0x3));
-        s3c_gpio_setpull(HDMI_GPX(7), S3C_GPIO_PULL_DOWN);
-}
-
-void s5p_v4l2_int_src_ext_hpd(void)
-{
-        s3c_gpio_cfgpin(HDMI_GPX(7), S3C_GPIO_SFN(0xf));
-        s3c_gpio_setpull(HDMI_GPX(7), S3C_GPIO_PULL_DOWN);
-}
-#endif
-/* end add */
 
 #ifdef CONFIG_VIDEO_EXYNOS_TV
 void s5p_tv_setup(void)

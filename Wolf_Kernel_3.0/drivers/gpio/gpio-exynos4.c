@@ -15,10 +15,6 @@
 #include <linux/io.h>
 #include <linux/gpio.h>
 
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-#include <linux/module.h>
-#endif
-
 #include <mach/map.h>
 
 #include <plat/gpio-core.h>
@@ -69,11 +65,7 @@ static struct s3c_gpio_cfg gpio_cfg_noint = {
  * Note: The initialization of 'base' member of s3c_gpio_chip structure
  * uses the above macro and depends on the banks being listed in order here.
  */
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-struct s3c_gpio_chip exynos4_gpio_common_4bit[] = {
-#else
 static struct s3c_gpio_chip exynos4_gpio_common_4bit[] = {
-#endif
 	{
 		.base	= S5P_VA_GPIO1,
 		.eint_offset = 0x0,
@@ -341,10 +333,6 @@ static struct s3c_gpio_chip exynos4_gpio_common_4bit[] = {
 		},
 	},
 };
-
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)	//add by cym 20130301
-EXPORT_SYMBOL(exynos4_gpio_common_4bit);
-#endif
 
 static struct s3c_gpio_chip exynos4210_gpio_4bit[] = {
 	{

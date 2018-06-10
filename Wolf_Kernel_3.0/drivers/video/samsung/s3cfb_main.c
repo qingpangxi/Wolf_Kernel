@@ -40,9 +40,6 @@
 #include <linux/suspend.h>
 #endif
 
-#include <mach/gpio.h>
-#include <plat/gpio-cfg.h>
-
 struct s3cfb_fimd_desc		*fbfimd;
 struct regulator *lcd_regulator = NULL;	//yulu
 
@@ -179,10 +176,6 @@ static DEVICE_ATTR(win_power, 0644,
 
 static int s3cfb_probe(struct platform_device *pdev)
 {
-printk("main:22222222222222222222222222%s\n", pdev->name);
-printk("%d\n", pdev->id);
-printk("%s\n", pdev->name);
-printk("===================================\n");
 	struct s3c_platform_fb *pdata = NULL;
 	struct resource *res = NULL;
 	struct s3cfb_global *fbdev[2];
@@ -529,28 +522,6 @@ void s3cfb_late_resume(struct early_suspend *h)
 	}
 
 	//info->system_state = POWER_ON;
-
-#if 1
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER)
-        #define GPIO_HUB_RESET EXYNOS4212_GPM2(4)
-        #define GPIO_HUB_CONNECT EXYNOS4212_GPM3(3)
-#else
-        #define GPIO_HUB_RESET EXYNOS4_GPL2(2)
-        #define GPIO_HUB_CONNECT EXYNOS4_GPK3(2)
-#endif
-        gpio_request(GPIO_HUB_RESET, "GPIO_HUB_RESET");
-        gpio_direction_output(GPIO_HUB_RESET, 1);
-        s3c_gpio_setpull(GPIO_HUB_RESET, S3C_GPIO_PULL_NONE);
-        gpio_free(GPIO_HUB_RESET);
-
-        // HUB_CONNECT
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER)
-        gpio_request(GPIO_HUB_CONNECT, "GPIO_HUB_CONNECT");
-        gpio_direction_output(GPIO_HUB_CONNECT, 1);
-        s3c_gpio_setpull(GPIO_HUB_CONNECT, S3C_GPIO_PULL_NONE);
-        gpio_free(GPIO_HUB_CONNECT);
-#endif
-#endif
 
 	return;
 }

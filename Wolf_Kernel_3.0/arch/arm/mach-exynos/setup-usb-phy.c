@@ -23,8 +23,6 @@
 #include <plat/regs-usb3-exynos-drd-phy.h>
 #ifdef CONFIG_SMM6260_MODEM
 #include <mach/modem.h>
-#include <linux/modemctl.h>
-
 #endif
 #define ETC6PUD		(S5P_VA_GPIO2 + 0x228)
 #define EXYNOS4_USB_CFG		(S3C_VA_SYS + 0x21C)
@@ -209,12 +207,6 @@ static void exynos4_usb_phy_control(enum usb_phy_type phy_type , int on)
 	spin_unlock(&phy_lock);
 }
 
-/* add by cym 20141010 */
-#ifdef CONFIG_USB_EXYNOS_SWITCH
-extern void usb_hub_gpio_init();
-#endif
-/* end add */
-
 static int exynos4_usb_phy0_init(struct platform_device *pdev)
 {
 	struct clk *otg_clk;
@@ -259,13 +251,6 @@ static int exynos4_usb_phy0_init(struct platform_device *pdev)
 	writel(rstcon, EXYNOS4_RSTCON);
 
 	clk_put(otg_clk);
-
-/* add by cym 20141010 */
-#ifdef CONFIG_USB_EXYNOS_SWITCH
-	usb_hub_gpio_init();
-#endif
-/* end add */
-
 	return 0;
 }
 
@@ -495,16 +480,7 @@ static int exynos4_usb_phy1_resume(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_USB_EHCI_S5P
-/* modify by cym 20141010 */
-#if 0
 extern void usb_hub_gpio_init();
-#else
-#ifndef CONFIG_USB_EXYNOS_SWITCH
-extern void usb_hub_gpio_init();
-#endif
-#endif
-/* end modify */
-extern struct modemctl *global_mc;
 #endif
 static int exynos4_usb_phy1_init(struct platform_device *pdev)
 {
@@ -513,45 +489,12 @@ static int exynos4_usb_phy1_init(struct platform_device *pdev)
 	u32 phyclk;
 	u32 rstcon;
 	int err;
-	struct completion done;
-#ifdef CONFIG_USB_EHCI_S5P
-	struct modemctl *mc =  global_mc;
-#endif
-
 printk("\n\n [usb_host_phy_init]++++++++++++++\n");
-
-/* add by cym 20120921 */
-#ifdef CONFIG_USB_EHCI_S5P	
-#ifdef CONFIG_SMM6260_MODEM
-/* end add */
-
-printk("[XJ] cp -> ap wakeup host: %d\n",smm6260_is_host_wakeup());
-
-/* add by cym 20120921 */
-#endif
-#endif
-/* end add */
 	
-#ifdef CONFIG_USB_EHCI_S5P	
 #ifdef CONFIG_SMM6260_MODEM
-
 		if (!smm6260_is_host_wakeup()) {
 			smm6260_set_slave_wakeup(1);
 		}
-		
-		if((mc != NULL)&&(mc->in_l3_state == 1)){
-			init_completion(&done);
-			mc->l3_done = &done;
-	//		mc->transfer_flag=1;
-			printk("---wait for wakeup go low no more than 0.5s\n");   //xujie temp
-			if (!wait_for_completion_timeout(&done, 2*HZ)) {
-				printk("completion wait timeout\n");
-			}
-
-		}
-
-
-#endif
 #endif
 
 	otg_clk = clk_get(&pdev->dev, "usbotg");
@@ -641,20 +584,12 @@ printk("[XJ] cp -> ap wakeup host: %d\n",smm6260_is_host_wakeup());
 	}
 	udelay(80);
 #ifdef CONFIG_USB_EHCI_S5P
-/* modify by cym 20141010 */
-#if 0
 	usb_hub_gpio_init();// liang
-#else
-#ifndef CONFIG_USB_EXYNOS_SWITCH
-	usb_hub_gpio_init();
-#endif
-#endif
-/* end modify */
 #endif
 
 	clk_disable(otg_clk);
 	clk_put(otg_clk);
-	//exynos_usb_mux_change(pdev, 0);//wjp for device function
+
 	return 0;
 }
 
@@ -957,7 +892,6 @@ static int exynos5_usb_phy30_exit(struct platform_device *pdev)
 
 int s5p_usb_phy_suspend(struct platform_device *pdev, int type)
 {
-	//msleep(10);
 	if (type == S5P_USB_PHY_HOST)
 		return exynos4_usb_phy1_suspend(pdev);
 

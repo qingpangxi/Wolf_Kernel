@@ -15,10 +15,6 @@
  *
 */
 
-/*******************************************************
-	modify by cym support for switch head 20130409
-********************************************************/
-
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -49,8 +45,8 @@
 /*
  * HeadSet type definition
  */
-//#define BIT_HEADSET             (1<<0)  // Speaker and Mic
-//define BIT_HEADSET_NO_MIC      (1<<1)  // Only Speaker
+#define BIT_HEADSET             (1<<0)  // Speaker and Mic
+#define BIT_HEADSET_NO_MIC      (1<<1)  // Only Speaker
 
 static int switch_gpio_active = 0;
 /*wenpin.cui: because initial detecion code has been moved to wm8994 driver, 
@@ -81,7 +77,7 @@ static int debug2hs_show(char *val, struct kernel_param *kp)
         printk(KERN_ALERT"\r\nxx value(%d) arg(%d)\r\n\r\n", value, switch_gpio_active);
         return 0;
 }
-#if 0
+
 /*
  * on:
  *      true: Headset on
@@ -90,8 +86,7 @@ static int debug2hs_show(char *val, struct kernel_param *kp)
 void debug_switch_to_hs(const unsigned int on)
 {
 	int ret = 0;
-/* remove by cym 20130408 support for MT6600 PWU_EN */
-#if 0
+
 	ret = gpio_request(EXYNOS4_GPC1(0), "GPC1");
 	if (ret < 0) {
 		printk(KERN_ERR"fail to request S5PV310_GPC1(0) for UART_SW\n ");
@@ -102,11 +97,8 @@ void debug_switch_to_hs(const unsigned int on)
 	s3c_gpio_setpull(EXYNOS4_GPC1(0), S3C_GPIO_PULL_NONE);
 	gpio_set_value(EXYNOS4_GPC1(0), ((!!on)? 1: 0));
 	gpio_free(EXYNOS4_GPC1(0));
-#endif
-/* end remove */
 	return;
 }
-#endif
 
 static int debug2hs_store(const char *val, struct kernel_param *kp)
 {
@@ -120,7 +112,7 @@ static int debug2hs_store(const char *val, struct kernel_param *kp)
 
 	value = *((int*)kp->arg);
 	printk(KERN_ALERT"xx value = %d\n",value);
-	//debug_switch_to_hs(value);
+	debug_switch_to_hs(value);
 	return 0; 
 }
 
@@ -137,9 +129,9 @@ static void gpio_switch_work(struct work_struct *work)
 	if (state != gpio_get_value(data->gpio))
 		return;
 
-	//state = !state;	// Get the state from "physical" level(0: HS removed, 1: HS inserted)
+	state = !state;	// Get the state from "physical" level(0: HS removed, 1: HS inserted)
 
-	//debug_switch_to_hs(state? true: false);	/* switch between uart/hp */ 
+	debug_switch_to_hs(state? true: false);	/* switch between uart/hp */ 
 	if (switch_current_state != state)
 	{
 		// Set the state and make the uevent to platfrom(HeadsetObserver).
@@ -153,13 +145,13 @@ static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
 {
 	struct gpio_switch_data *switch_data =
 		(struct gpio_switch_data *)dev_id;
-#if 0
+
 	if (switch_current_state) 
 		;
 	else /* noise coming */
 		/* Turn off uart first to avoid noise made by trace */
 		debug_switch_to_hs(true);
-#endif
+
 	/* wait for a long time to make sure voltage is stable*/
 	schedule_delayed_work(&switch_data->work, HZ/2);
 	return IRQ_HANDLED;
@@ -167,7 +159,6 @@ static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
 
 static ssize_t switch_gpio_print_state(struct switch_dev *sdev, char *buf)
 {
-#if 0
 	struct gpio_switch_data	*switch_data =
 		container_of(sdev, struct gpio_switch_data, sdev);
 	const char *state;
@@ -179,16 +170,7 @@ static ssize_t switch_gpio_print_state(struct switch_dev *sdev, char *buf)
 
 	if (state)
 		return sprintf(buf, "%s\n", state);
-#endif
-#if 0	
-	if(0 == sdev->state)
-		return sprintf(buf, "%s\n", "0");
-	else
-		return sprintf(buf, "%s\n", "1");
-#else
-	return sprintf(buf, "%s\n", "1");
-#endif
-	//return -1;
+	return -1;
 }
 
 static int gpio_switch_probe(struct platform_device *pdev)
@@ -241,7 +223,7 @@ static int gpio_switch_probe(struct platform_device *pdev)
 		goto err_request_irq;
 
 	schedule_delayed_work(&switch_data->work, HZ/2);/*wenpin.cui: init check*/
-	//debug_switch_to_hs(true);
+	debug_switch_to_hs(true);
 		
 	return 0;
 

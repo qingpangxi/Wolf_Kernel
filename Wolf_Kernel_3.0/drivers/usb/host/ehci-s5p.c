@@ -26,18 +26,11 @@
 #include <mach/modem.h>
 #include <linux/regulator/consumer.h>
 #include <mach/max8997.h>
-
-#include <linux/modemctl.h>
-
-
 #endif
 #include <plat/cpu.h>
 #include <plat/ehci.h>
 #include <plat/usb-phy.h>
 #include <plat/gpio-cfg.h>
-#include <mach/regs-pmu.h>
-#include <mach/regs-usb-host.h>
-#include <mach/board_rev.h>
 
 /* For ehci on/off sysfs */
 #ifdef CONFIG_SMM6260_MODEM
@@ -106,12 +99,10 @@ static void s5p_wait_for_cp_resume(struct usb_hcd *hcd)
 		msleep(10);
 		val32 = ehci_readl(ehci, portsc);
 	} while (++retry_cnt < 30 && !(val32 & PORT_CONNECT));
-	//if(retry_cnt >= 30)
-		//crash_event(0);  //MODEM_EVENT_RESET
 	printk("\n\n%s: retry_cnt = %d\n", __func__, retry_cnt);
 }
 
-
+/*
 static struct regulator *usb_reg_ehci_analog, *usb_reg_ehci_core ,*usb_reg_hsic;
 
 void usb_host_phy_power_init(struct platform_device *pdev)
@@ -121,7 +112,7 @@ void usb_host_phy_power_init(struct platform_device *pdev)
 
 
 	if (!usb_reg_ehci_core) {
-		usb_reg_ehci_core = regulator_get(&pdev->dev, "vdd10_ush");
+		usb_reg_ehci_core = regulator_get(&pdev->dev, "vdd_ldo11");
 		if (IS_ERR(usb_reg_ehci_core)) {
 			retval = PTR_ERR(usb_reg_ehci_core);
 			dev_err(&pdev->dev, "No VDD_USB_1.0V regualtor: %d\n",
@@ -131,7 +122,7 @@ void usb_host_phy_power_init(struct platform_device *pdev)
 	}
 
 	if (!usb_reg_hsic) {
-		usb_reg_hsic = regulator_get(&pdev->dev, "vdd18_hsic");
+		usb_reg_hsic = regulator_get(&pdev->dev, "vdd_ldo1");
 		if (IS_ERR(usb_reg_hsic)) {
 			retval = PTR_ERR(usb_reg_hsic);
 			dev_err(&pdev->dev, "No VDD_USB_1.8V regualtor: %d\n",
@@ -141,7 +132,7 @@ void usb_host_phy_power_init(struct platform_device *pdev)
 	}
 
 	if (!usb_reg_ehci_analog) {
-		usb_reg_ehci_analog = regulator_get(&pdev->dev, "vdd33_uotg");
+		usb_reg_ehci_analog = regulator_get(&pdev->dev, "vdd_ldo8");
 		if (IS_ERR(usb_reg_ehci_analog)) {
 			retval = PTR_ERR(usb_reg_ehci_analog);
 			dev_err(&pdev->dev, "No VDD_USB_3.3V regualtor: %d\n",
@@ -189,64 +180,37 @@ void usb_host_phy_power_off(void)
 	retval = regulator_is_enabled(usb_reg_ehci_core);
 	printk(KERN_DEBUG "ehci check ldo usb_reg_ehci_core(%d)\n", retval);
 }
-
-
-static int usb_host_phy_power_onoff(bool enable)
+*/
+void usb_host_phy_power_init(struct platform_device *pdev)
 {
-	int ret=0;
+	int retval;
 
-		struct regulator *vdd18_hsic_regulator;
-		struct regulator *vdd33_uotg_regulator;
-		struct regulator *vdd10_ush_regulator;
-	
-	
-		vdd33_uotg_regulator = regulator_get(NULL, "vdd33_uotg");
-		if (IS_ERR(vdd33_uotg_regulator)) {
-			pr_err("%s: failed to get %s\n", __func__, "vdd33_uotg");
-			ret = -ENODEV;
-		}
-	
-		vdd10_ush_regulator = regulator_get(NULL, "vdd10_ush");
-		if (IS_ERR(vdd10_ush_regulator)) {
-			pr_err("%s: failed to get %s\n", __func__, "vdd10_ush");
-			ret = -ENODEV;
-		}
-	
-		vdd18_hsic_regulator = regulator_get(NULL, "vdd18_hsic");
-		if (IS_ERR(vdd18_hsic_regulator)) {
-			pr_err("%s: failed to get %s\n", __func__, "vdd18_hsic");
-			ret = -ENODEV;
-		}
-	
-		if (enable) {
-			pr_info("%s: enable LDOs\n", __func__);
-		
-			if (!regulator_is_enabled(vdd18_hsic_regulator))
-				regulator_enable(vdd18_hsic_regulator);
-		if (!regulator_is_enabled(vdd33_uotg_regulator))
-				regulator_enable(vdd33_uotg_regulator);
-			if (!regulator_is_enabled(vdd10_ush_regulator))
-				regulator_enable(vdd10_ush_regulator);
-		
-		} else{
-				pr_info("%s: disable LDOs\n", __func__);
-				regulator_force_disable(vdd18_hsic_regulator);
-				regulator_force_disable(vdd33_uotg_regulator);
-				regulator_force_disable(vdd10_ush_regulator);
-		
-		}
-	
-		regulator_put(vdd18_hsic_regulator);
-		regulator_put(vdd33_uotg_regulator);
-		regulator_put(vdd10_ush_regulator);
+	PMIC_Control_Set(PMIC_CONTROL_VDD10_USH,POWERON);
+	PMIC_Control_Set(PMIC_CONTROL_VDD18_HSIC,POWERON);
+	PMIC_Control_Set(PMIC_CONTROL_VDD33_UOTG,POWERON);
 
-	return ret;
+
+
+
+	printk(KERN_DEBUG "%s: ldo on\n", __func__);
+
+
 }
+void usb_host_phy_power_off(void)
+{
+	int retval;
+
+	PMIC_Control_Set(PMIC_CONTROL_VDD33_UOTG,POWEROFF);
+	PMIC_Control_Set(PMIC_CONTROL_VDD18_HSIC,POWEROFF);
+	PMIC_Control_Set(PMIC_CONTROL_VDD10_USH,POWEROFF);
+
+	printk(KERN_DEBUG "%s: ldo off\n", __func__);
+
+}
+
 #endif
 
 #ifdef CONFIG_PM
-extern struct modemctl *global_mc;
-
 static int s5p_ehci_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -254,7 +218,6 @@ static int s5p_ehci_suspend(struct device *dev)
 	struct s5p_ehci_hcd *s5p_ehci = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = s5p_ehci->hcd;
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-	struct modemctl *mc =  global_mc;
 	unsigned long flags;
 	int rc = 0;
 
@@ -285,8 +248,7 @@ static int s5p_ehci_suspend(struct device *dev)
 		pdata->phy_exit(pdev, S5P_USB_PHY_HOST);
 #ifdef CONFIG_SMM6260_MODEM
 	smm6260_set_active_state(0);
-    mc->in_l3_state = 1;
-	rc = usb_host_phy_power_onoff(0);
+	usb_host_phy_power_off();
 #endif
 fail:
 	clk_disable(s5p_ehci->clk);
@@ -301,18 +263,14 @@ static int s5p_ehci_resume(struct device *dev)
 	struct s5p_ehci_hcd *s5p_ehci = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = s5p_ehci->hcd;
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-	int rc = 0;
 #ifdef CONFIG_SMM6260_MODEM	
-	rc = usb_host_phy_power_onoff(1);
+	usb_host_phy_power_init(pdev);
 #endif
 	clk_enable(s5p_ehci->clk);
 	pm_runtime_resume(&pdev->dev);
 
 	if (pdata->phy_init)
 		pdata->phy_init(pdev, S5P_USB_PHY_HOST);
-#ifdef CONFIG_SMM6260_MODEM
-		writel(0x03C00000, hcd->regs + 0x90);
-#endif
 
 	s5p_ehci_configurate(hcd);
 
@@ -353,7 +311,7 @@ static int s5p_ehci_resume(struct device *dev)
 
 	hcd->state = HC_STATE_SUSPENDED;
 
-	return rc;
+	return 0;
 }
 
 #else
@@ -361,9 +319,7 @@ static int s5p_ehci_resume(struct device *dev)
 #define s5p_ehci_resume		NULL
 #endif
 
-/* modify by cym 20130820 if we define this, USB3503 not work */
-//#ifdef CONFIG_USB_SUSPEND
-#ifdef CONFIG_USB_SUSPEND_cym
+#ifdef CONFIG_USB_SUSPEND
 static int s5p_ehci_runtime_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -377,7 +333,6 @@ static int s5p_ehci_runtime_suspend(struct device *dev)
 		pdata->phy_suspend(pdev, S5P_USB_PHY_HOST);
 
 #ifdef CONFIG_USB_EXYNOS_SWITCH
-	if (samsung_board_rev_is_0_0()) {
 	(void) ehci_hub_control(hcd,
 			ClearPortFeature,
 			USB_PORT_FEAT_POWER,
@@ -386,7 +341,6 @@ static int s5p_ehci_runtime_suspend(struct device *dev)
 	ehci_readl(ehci, &ehci->regs->command);
 
 	msleep(20);
-	}
 #endif
 	return 0;
 }
@@ -428,7 +382,6 @@ static int s5p_ehci_runtime_resume(struct device *dev)
 		hcd->state = HC_STATE_SUSPENDED;
 #ifdef CONFIG_USB_EXYNOS_SWITCH
 	} else {
-		if (samsung_board_rev_is_0_0()) {
 		(void) ehci_hub_control(ehci_to_hcd(ehci),
 				SetPortFeature,
 				USB_PORT_FEAT_POWER,
@@ -436,7 +389,6 @@ static int s5p_ehci_runtime_resume(struct device *dev)
 		/* Flush those writes */
 		ehci_readl(ehci, &ehci->regs->command);
 		msleep(20);
-		}
 #endif
 	}
 
@@ -446,7 +398,6 @@ static int s5p_ehci_runtime_resume(struct device *dev)
 #define s5p_ehci_runtime_suspend	NULL
 #define s5p_ehci_runtime_resume		NULL
 #endif
-/* end remove */
 
 static const struct hc_driver s5p_ehci_hc_driver = {
 	.description		= hcd_name,
@@ -559,14 +510,12 @@ exit:
 	if (!power_on && s5p_ehci->power_on) {
 		printk(KERN_DEBUG "%s: EHCI turns off\n", __func__);
 		s5p_ehci->power_on = 0;
-		/* remove by cym 20130820 */
-		//usb_remove_hcd(hcd);
+		usb_remove_hcd(hcd);
 
-		//if (pdata && pdata->phy_exit)
-		//	pdata->phy_exit(pdev, S5P_USB_PHY_HOST);
-		/* end remove */
+		if (pdata && pdata->phy_exit)
+			pdata->phy_exit(pdev, S5P_USB_PHY_HOST);
 #ifdef CONFIG_SMM6260_MODEM
-		smm6260_set_active_state(0);
+			smm6260_set_active_state(0);
 #endif
 	} else if (power_on) {
 		printk(KERN_DEBUG "%s: EHCI turns on\n", __func__);
@@ -579,10 +528,8 @@ exit:
 		s5p_ehci_configurate(hcd);
 
 		irq = platform_get_irq(pdev, 0);
-		/* remove by cym 20130820 */
-		//retval = usb_add_hcd(hcd, irq,
-		//		IRQF_DISABLED | IRQF_SHARED);
-		/* end remove */
+		retval = usb_add_hcd(hcd, irq,
+				IRQF_DISABLED | IRQF_SHARED);
 		if (retval < 0) {
 			dev_err(s5p_dev, "Power On Fail\n");
 			goto exit;
@@ -683,7 +630,7 @@ static int __devinit s5p_ehci_probe(struct platform_device *pdev)
 		goto fail;
 	}
 #ifdef CONFIG_SMM6260_MODEM
-//lisw debug	usb_host_phy_power_init(pdev);
+	usb_host_phy_power_init(pdev);
 #endif
 	if (pdata->phy_init)
 		pdata->phy_init(pdev, S5P_USB_PHY_HOST);
@@ -715,7 +662,6 @@ static int __devinit s5p_ehci_probe(struct platform_device *pdev)
 	s5p_dev = &pdev->dev;
 #endif
 #ifdef CONFIG_USB_EXYNOS_SWITCH
-	if (samsung_board_rev_is_0_0())
 	(void) ehci_hub_control(ehci_to_hcd(ehci),
 			ClearPortFeature,
 			USB_PORT_FEAT_POWER,
@@ -728,26 +674,17 @@ static int __devinit s5p_ehci_probe(struct platform_device *pdev)
 #ifdef CONFIG_GPIO_SMM6260
 	set_hsic_host_active(1);
 #endif
-
-#ifdef CONFIG_MODEM_BOOT_IN_UBOOT
-	#ifdef CONFIG_SMM6260_MODEM
+#if 0 //#ifdef CONFIG_SMM6260_MODEM
 		err = gpio_request(GPIO_ACTIVE_STATE, "ACTIVE_STATE");
 		if (err) {
 			printk(KERN_ERR "fail to request gpio %s\n", "ACTIVE_STATE");
 		} else {
 			gpio_direction_output(GPIO_ACTIVE_STATE, 1);
 			s3c_gpio_setpull(GPIO_ACTIVE_STATE, S3C_GPIO_PULL_NONE);
-			
-			gpio_set_value(GPIO_ACTIVE_STATE, 1);
-			printk("%s: AP>>CP:   ACTIVE_STATE:%d\n",__FUNCTION__,1);
-
-			gpio_free(GPIO_ACTIVE_STATE);
 		}
 
-	//	smm6260_set_active_state(1);
-	#endif	
-#endif
-
+	smm6260_set_active_state(1);
+#endif	
 	return 0;
 
 fail:

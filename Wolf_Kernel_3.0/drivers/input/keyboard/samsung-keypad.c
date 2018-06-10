@@ -286,6 +286,45 @@ static void samsung_keypad_close(struct input_dev *input_dev)
 	samsung_keypad_stop(keypad);
 }
 
+//added by yulu
+static irqreturn_t s3c_keygpio_isr(int irq, void *dev_id)
+{
+	unsigned int tmp;
+	int err;
+	static unsigned int last_key_status=1;
+	 unsigned int key_status;
+	struct samsung_keypad_platdata *pdata = (struct samsung_keypad_platdata *)dev_id;
+	//struct input_dev *dev = pdata->dev;
+
+	disable_irq_nosync(IRQ_EINT(2));
+
+	err = gpio_request(EXYNOS4_GPX0(2), "GPX0");
+	if (err) {
+		printk(KERN_ERR "failed to request GPX0 for "
+			"POWER KEY\n");
+		goto out;
+	}
+	/*Robin, TA4GPX0(2) used as power key */
+	key_status = gpio_get_value(EXYNOS4_GPX0(2));
+	gpio_free(EXYNOS4_GPX0(2));
+
+	if (!key_status) 
+	{
+		SimulateKey(KEY_POWER,1);
+		//mdelay(10);
+		//SimulateKey(KEY_POWER,0);
+	}
+	else 
+	{
+		SimulateKey(KEY_POWER,0);
+	}
+		
+out:	
+	enable_irq(IRQ_EINT(2));
+
+	return IRQ_HANDLED;
+}
+
 static int __devinit samsung_keypad_probe(struct platform_device *pdev)
 {
 	const struct samsung_keypad_platdata *pdata;
@@ -308,13 +347,8 @@ static int __devinit samsung_keypad_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "no keymap data defined\n");
 		return -EINVAL;
 	}
-/* modify by cym 20140828 */
-#if defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
+
 	if (!pdata->rows || pdata->rows > SAMSUNG_MAX_ROWS)
-#elif defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-	if (!pdata->rows || (pdata->rows > SAMSUNG_MAX_ROWS+6))	//(8+6) ROW_0--ROW_13
-#endif
-/* end modify */
 		return -EINVAL;
 
 	if (!pdata->cols || pdata->cols > SAMSUNG_MAX_COLS)
@@ -394,6 +428,16 @@ static int __devinit samsung_keypad_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to register keypad interrupt\n");
 		goto err_put_clk;
 	}
+	//added by yulu
+	//printk("~~~~~~~~%s~%d  %d~\n",__FUNCTION__,IRQ_EINT(2),IRQ_EINT2);	//yulu
+	error = request_irq(IRQ_EINT(2),s3c_keygpio_isr,IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+					"key gpio",keypad);
+	if (error) {
+		printk("request_irq failed (IRQ_KEYPAD (gpio)) ret = %d!!!\n",error);
+		error = -EIO;
+		goto err_put_clk;
+	}
+	irq_set_irq_wake(IRQ_EINT(2), 1);
 
 	error = input_register_device(keypad->input_dev);
 	if (error)

@@ -69,37 +69,6 @@ void s3cfb_cfg_gpio(struct platform_device *pdev)
 {
 	int err;
 	
-	/* add by cym 20150120 */
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-
-	err = gpio_request(EXYNOS4_GPC0(2), "VGA_EN");
-        if (err) {
-                printk(KERN_ERR "failed to request VGA_EN\n");
-                return err;
-        }
-
-        gpio_direction_output(EXYNOS4_GPC0(2), 0);
-
-        s3c_gpio_cfgpin(EXYNOS4_GPC0(2), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPC0(2));
-	msleep(250);
-	
-#endif
-        err = gpio_request(EXYNOS4_GPL0(4), "BK_VDD_EN");
-        if (err) {
-                printk(KERN_ERR "failed to request BK_VDD_EN\n");
-                //return err;
-        }
-
-        gpio_direction_output(EXYNOS4_GPL0(4), 1);
-        s3c_gpio_cfgpin(EXYNOS4_GPL0(4), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPL0(4));
-
-        printk("(%s, %d): BK_VDD_ON\n", __FUNCTION__, __LINE__);
-	msleep(100);
-
-        /* end add */
-
 	s3cfb_gpio_setup_24bpp(EXYNOS4_GPF0(0), 8, S3C_GPIO_SFN(2), S5P_GPIO_DRVSTR_LV4);
 	s3cfb_gpio_setup_24bpp(EXYNOS4_GPF1(0), 8, S3C_GPIO_SFN(2), S5P_GPIO_DRVSTR_LV4);
 	s3cfb_gpio_setup_24bpp(EXYNOS4_GPF2(0), 8, S3C_GPIO_SFN(2), S5P_GPIO_DRVSTR_LV4);
@@ -116,8 +85,6 @@ void s3cfb_cfg_gpio(struct platform_device *pdev)
 
 	s3c_gpio_cfgpin(EXYNOS4_GPL1(0), S3C_GPIO_OUTPUT);
 	gpio_free(EXYNOS4_GPL1(0));
-
-	printk("(%s, %d): LCD_PWDN ON\n", __FUNCTION__, __LINE__);
 #endif
 }
 #elif defined(CONFIG_FB_S5P_AMS369FG06)
@@ -261,7 +228,7 @@ int s3cfb_backlight_on(struct platform_device *pdev)
 {
 	int err;
 
-#if 0	
+	
 	//VLED_EN
 	err = gpio_request(EXYNOS4_GPC1(2), "GPC1_2");
 	if (err) {
@@ -273,12 +240,6 @@ int s3cfb_backlight_on(struct platform_device *pdev)
 
 	s3c_gpio_cfgpin(EXYNOS4_GPC1(2), S3C_GPIO_OUTPUT);
 	gpio_free(EXYNOS4_GPC1(2));
-
-	mdelay(5);
-	printk("(%s, %d): BK_LCD_EN\n", __FUNCTION__, __LINE__);
-#endif
-	/*modify by cym 20121017 */
-#if 0
 	//VLED_ON
 	err = gpio_request(EXYNOS4_GPC0(1), "GPC0_1");
 	if (err) {
@@ -322,118 +283,6 @@ int s3cfb_backlight_on(struct platform_device *pdev)
 	s3c_gpio_cfgpin(EXYNOS4_GPC1(1), S3C_GPIO_OUTPUT);
 	gpio_free(EXYNOS4_GPC1(1));
 	mdelay(5);
-#else
-	//VLED_ON
-#if 0
-	err = gpio_request(EXYNOS4_GPC0(1), "GPC0_1");
-	if (err) {
-		printk(KERN_ERR "failed to request GPC0_1 for "
-			"lcd power control\n");
-		return err;
-	}
-	gpio_direction_output(EXYNOS4_GPC0(1), 1);
-
-	s3c_gpio_cfgpin(EXYNOS4_GPC0(1), S3C_GPIO_OUTPUT);
-	gpio_free(EXYNOS4_GPC0(1));
-	printk("(%s, %d): VLED_ON\n", __FUNCTION__, __LINE__);
-#endif
-	//mdelay(5);
-        
-	mdelay(250);
-	//PWM
-	err = gpio_request(EXYNOS4_GPD0(1), "GPD0_1");
-	if (err) {
-		printk(KERN_ERR "failed to request GPD0 for "
-			"lcd backlight control\n");
-		//return err;
-	}
-#if !defined(CONFIG_BACKLIGHT_PWM)
-	gpio_direction_output(EXYNOS4_GPD0(1), 1);
-	gpio_free(EXYNOS4_GPD0(1));
-#else
-/* modify by cym 20130417 for TSC2007 TouchScreen */
-//#ifdef CONFIG_TOUCHSCREEN_TSC2007
-//	gpio_direction_output(EXYNOS4_GPD0(1), 0);
-//#else
-	gpio_direction_output(EXYNOS4_GPD0(1), 0);
-
-	s3c_gpio_cfgpin(EXYNOS4_GPD0(1), EXYNOS4_GPD_0_1_TOUT_1);
-
-	gpio_free(EXYNOS4_GPD0(1));
-	printk("(%s, %d): LCD_PWM_ON\n", __FUNCTION__, __LINE__);
-//#endif
-/* end modify */
-#endif
-	mdelay(5);
-#if 0
-	//TP1_EN
-	err = gpio_request(EXYNOS4_GPL0(2), "TP1_EN");
-	if (err) {
-		printk(KERN_ERR "failed to request TP1_EN for "
-			"I2C control\n");
-		return err;
-	}
-	//because in uboot we enable,we want to enable it again we must disable it    20121109
-	//gpio_direction_output(EXYNOS4_GPL0(2), 0); 20130508
-	//mdelay(100);
-	gpio_direction_output(EXYNOS4_GPL0(2), 1);
-
-	s3c_gpio_cfgpin(EXYNOS4_GPL0(2), S3C_GPIO_OUTPUT);
-	gpio_free(EXYNOS4_GPL0(2));
-
-	printk("(%s, %d): TP1_EN_ON\n", __FUNCTION__, __LINE__);
-	mdelay(5);
-#endif
-#endif
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-	err = gpio_request_one(EXYNOS4_GPC0(2), 0, "GPC0_2");
-        if (err) {
-                printk(KERN_ERR "failed to request GPC0_2 for "
-                                "4.3 LCD control\n");
-                return err;
-        }
-
-        s3c_gpio_setpull(EXYNOS4_GPC0(2), S3C_GPIO_PULL_UP);
-        //gpio_set_value(EXYNOS4_GPC0(2), 0);
-
-        //mdelay(10);
-
-        gpio_set_value(EXYNOS4_GPC0(2), 1);
-
-        gpio_free(EXYNOS4_GPC0(2));
-#endif		
-#if 0
-	err = gpio_request_one(EXYNOS4_GPL1(1), 0, "GPL1_1");
-        if (err) {
-                printk(KERN_ERR "failed to request GPL1_1 for "
-                                "4.3 LCD control\n");
-                return err;
-        }
-
-        s3c_gpio_setpull(EXYNOS4_GPL1(1), S3C_GPIO_PULL_UP);
-        gpio_set_value(EXYNOS4_GPL1(1), 0);
-
-        gpio_free(EXYNOS4_GPL1(1));
-#endif
-	/*end modify */
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-	/* add by cym 20141125 */
-	err = gpio_request(EXYNOS4_GPC0(2), "VGA_EN");
-        if (err) {
-                printk(KERN_ERR "failed to request VGA_EN\n");
-                return err;
-        }
-
-	gpio_direction_output(EXYNOS4_GPC0(2), 1);
-
-	s3c_gpio_cfgpin(EXYNOS4_GPC0(2), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPC0(2));
-
-	printk("(%s, %d): VGA_EN_ON\n", __FUNCTION__, __LINE__);
-	/* end add */
-#endif
 	return 0;
 }
 
@@ -448,8 +297,7 @@ int s3cfb_backlight_off(struct platform_device *pdev)
 	//		"lcd backlight control\n");
 	//	return err;
 	//}
-	/* modify by cym 20121017 */
-#if 0
+
 	gpio_direction_output(EXYNOS4_GPD0(1), 0);
 	//gpio_free(EXYNOS4_GPD0(1));
 
@@ -487,59 +335,7 @@ int s3cfb_backlight_off(struct platform_device *pdev)
 
 	s3c_gpio_cfgpin(EXYNOS4_GPC0(1), S3C_GPIO_OUTPUT);
 	gpio_free(EXYNOS4_GPC0(1));
-#else
-	//gpio_direction_output(EXYNOS4_GPD0(1), 0);
-	//gpio_free(EXYNOS4_GPD0(1));
-	//printk("(%s, %d): LCD_PWM_OFF\n", __FUNCTION__, __LINE__);
-#if 0	
-	//TP1_EN
-	err = gpio_request(EXYNOS4_GPL0(2), "TP1_EN");
-	if (err) {
-		printk(KERN_ERR "failed to request TP1_EN for "
-			"I2C control\n");
-		return err;
-	}
-	gpio_direction_output(EXYNOS4_GPL0(2), 0);
 
-	s3c_gpio_cfgpin(EXYNOS4_GPL0(2), S3C_GPIO_OUTPUT);
-	gpio_free(EXYNOS4_GPL0(2));
-
-	mdelay(5);
-	printk("(%s, %d): TP1_EN_OFF\n", __FUNCTION__, __LINE__);
-#endif
-	//VLED_ON
-#if 0
-	err = gpio_request(EXYNOS4_GPC0(1), "GPC0_1");
-	if (err) {
-		printk(KERN_ERR "failed to request GPC0_1 for "
-			"lcd power control\n");
-		return err;
-	}
-	gpio_direction_output(EXYNOS4_GPC0(1), 0);
-
-	s3c_gpio_cfgpin(EXYNOS4_GPC0(1), S3C_GPIO_OUTPUT);
-	gpio_free(EXYNOS4_GPC0(1));
-	printk("(%s, %d): VLED_OFF\n", __FUNCTION__, __LINE__);
-#endif
-#endif
-	/* end modify */
-
-	/* add by cym 20150120 */
-#if 1
-        err = gpio_request(EXYNOS4_GPD0(1), "GPD0_1");
-        if (err) {
-                printk(KERN_ERR "failed to request GPD0 for "
-			"lcd backlight control\n");
-                //return err;
-        }
-
-        gpio_direction_output(EXYNOS4_GPD0(1), 0);
-        s3c_gpio_cfgpin(EXYNOS4_GPD0(1), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPD0(1));
-
-        printk("(%s, %d): LCD_PWM_OFF\n", __FUNCTION__, __LINE__);
-#endif
-        /* end add */
 	
 	//LVDS_PWDN
 	err = gpio_request(EXYNOS4_GPL1(0), "GPL1_0");
@@ -548,56 +344,10 @@ int s3cfb_backlight_off(struct platform_device *pdev)
 			"lcd power control\n");
 		return err;
 	}
-	gpio_direction_output(EXYNOS4_GPL1(0), 0);
+	gpio_direction_output(EXYNOS4_GPL1(0), 1);
 
 	s3c_gpio_cfgpin(EXYNOS4_GPL1(0), S3C_GPIO_OUTPUT);
 	gpio_free(EXYNOS4_GPL1(0));
-
-#if 0
-        err = gpio_request_one(EXYNOS4_GPL1(1), 0, "GPL1_1");
-        if (err) {
-                printk(KERN_ERR "failed to request GPL1_1 for "
-                                "4.3 LCD control\n");
-                return err;
-        }
-
-        s3c_gpio_setpull(EXYNOS4_GPL1(1), S3C_GPIO_PULL_UP);
-        gpio_set_value(EXYNOS4_GPL1(1), 1);
-
-        gpio_free(EXYNOS4_GPL1(1));
-#endif
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-	/* add by cym 20141125 */
-        err = gpio_request(EXYNOS4_GPC0(2), "VGA_EN");
-        if (err) {
-                printk(KERN_ERR "failed to request VGA_EN\n");
-                return err;
-        }
-
-        gpio_direction_output(EXYNOS4_GPC0(2), 0);
-
-        s3c_gpio_cfgpin(EXYNOS4_GPC0(2), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPC0(2));
-
-        printk("(%s, %d): VGA_EN_OFF\n", __FUNCTION__, __LINE__);
-        /* end add */
-#endif
-	/* add by cym 20150120 */
-        err = gpio_request(EXYNOS4_GPL0(4), "BK_VDD_EN");
-        if (err) {
-                printk(KERN_ERR "failed to request BK_VDD_EN for\n");
-                return err;
-        }
-
-        gpio_direction_output(EXYNOS4_GPL0(4), 0);
-
-        s3c_gpio_cfgpin(EXYNOS4_GPL0(4), S3C_GPIO_OUTPUT);
-        gpio_free(EXYNOS4_GPL0(4));
-
-        printk("(%s, %d): BK_VDD_OFF\n", __FUNCTION__, __LINE__);
-        /* end add */
-
 	return 0;
 }
 
@@ -647,7 +397,7 @@ int s3cfb_backlight_off(struct platform_device *pdev)
 int s3cfb_lcd_on(struct platform_device *pdev)
 {
 	int err;
-#if 0
+
 	err = gpio_request_one(EXYNOS4_GPX0(6), GPIOF_OUT_INIT_HIGH, "GPX0");
 	if (err) {
 		printk(KERN_ERR "failed to request GPX0 for "
@@ -663,7 +413,7 @@ int s3cfb_lcd_on(struct platform_device *pdev)
 	msleep(10);
 
 	gpio_free(EXYNOS4_GPX0(6));
-#endif
+
 	return 0;
 }
 
@@ -799,7 +549,6 @@ int s3cfb_lcd_on(struct platform_device *pdev)
 
 	gpio_free(EXYNOS4_GPX0(6));
 #elif defined (CONFIG_MACH_SMDK4X12)
-#if 0
 	err = gpio_request_one(EXYNOS4_GPX1(5), GPIOF_OUT_INIT_HIGH, "GPX0");
 	if (err) {
 		printk(KERN_ERR "failed to request GPX0 for "
@@ -813,7 +562,6 @@ int s3cfb_lcd_on(struct platform_device *pdev)
 	gpio_set_value(EXYNOS4_GPX1(5), 1);
 
 	gpio_free(EXYNOS4_GPX1(5));
-#endif
 #endif
 
 	return 0;

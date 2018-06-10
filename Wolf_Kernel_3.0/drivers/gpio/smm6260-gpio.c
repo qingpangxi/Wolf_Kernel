@@ -32,17 +32,9 @@ int dbg_level = SMM6260_DBG_LEVEL_ON | SMM6260_DBG_LEVEL_FUNC | SMM6260_DBG_LEVE
  * GPC0_2 MD_RSTN
  * GPL2_1 MD_RESETBB
  */
- /* modify by cym 20130419 */
-#if 0
 #define GPIO_MD_PWON	EXYNOS4_GPC0(0)
 #define GPIO_MD_RSTN	EXYNOS4_GPC0(2)
 #define GPIO_MD_RESETBB	EXYNOS4_GPL2(1)
-#else
-#define GPIO_MD_PWON	EXYNOS4_GPX3(3)
-#define GPIO_MD_RSTN	EXYNOS4_GPC0(2)
-#define GPIO_MD_RESETBB	EXYNOS4_GPL2(1)
-#endif
-/* end modify */
 
 /* Modem GPIO
  *
@@ -53,31 +45,14 @@ int dbg_level = SMM6260_DBG_LEVEL_ON | SMM6260_DBG_LEVEL_FUNC | SMM6260_DBG_LEVE
  */
 #define HSIC_HOST_ACTIVE	EXYNOS4_GPC0(3)
 #define HSIC_SLAVE_WAKEUP	EXYNOS4_GPC0(4)
-/* modify by cym 20130419 */
-#if 0
 #define HSIC_HOST_WAKEUP	EXYNOS4_GPX2(5)
-#else
-#define HSIC_HOST_WAKEUP	EXYNOS4_GPX3(0)
-#endif
-/* end modify */
 #define HSIC_HOST_SUSREQ	EXYNOS4_GPX1(6)
 
-/* remove by cym 20130419 */
-#if 0
 #define NFC_EN1		EXYNOS4_GPL0(3)
-#endif
-/* end remove */
 // I don't know what are those used for...
-/* modify by cym 20130419 */
-#if 0
 #define GPIO_MD_B14	EXYNOS4_GPX2(4)
-#define GPIO_MD_L15		EXYNOS4_GPX3(5)
+#define GPIO_MD_L15	EXYNOS4_GPX3(5)
 #define GPIO_MD_G15	EXYNOS4_GPF3(5)
-#else
-#define GPIO_MD_B14	EXYNOS4_GPX3(1)
-#define GPIO_MD_L15		EXYNOS4_GPX0(1)
-#define GPIO_MD_G15	EXYNOS4_GPF3(5)
-#endif
 
 /* Variables */
 //static struct delayed_work smm6260_gpio_delayed_work;
@@ -133,14 +108,10 @@ static void smm6260_gpio_cfg()
 	s3c_gpio_cfgpin(GPIO_MD_G15, S3C_GPIO_INPUT);
 	gpio_free(GPIO_MD_G15);
 
-/* remove by cym 20130419 */
-#if 0
 	gpio_request(NFC_EN1, "NFC_EN1");
 	gpio_direction_output(NFC_EN1, 1);
 	s3c_gpio_setpull(NFC_EN1, S3C_GPIO_PULL_NONE);
 	gpio_free(NFC_EN1);
-#endif
-/* end remove */
 #endif
 
 #if SMM6260_DOWNLOAD_MODE// all input, for download test only.

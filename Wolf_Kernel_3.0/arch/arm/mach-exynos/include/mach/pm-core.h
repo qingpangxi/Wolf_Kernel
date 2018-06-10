@@ -24,7 +24,7 @@ static inline void s3c_pm_debug_init_uart(void)
 
 static inline void s3c_pm_arch_prepare_irqs(void)
 {
-	//unsigned int tmp;
+	unsigned int tmp;
 #if 0
 	tmp = __raw_readl(S5P_WAKEUP_MASK);
 	tmp &= ~(1 << 31);
@@ -34,44 +34,10 @@ static inline void s3c_pm_arch_prepare_irqs(void)
 	s3c_irqwake_intmask &= ~(0xFFF << 20);
 	s3c_irqwake_intmask |= (0x3F << 20);//Robin, Mask IRQ2/IRQ3/FIQ2/FIQ3 of external GIC
 	s3c_irqwake_eintmask &=~(0x1 << 2);	//yulu
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE)  || defined(CONFIG_CPU_TYPE_POP_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_ELITE)
-
-	/* add by cym 20140812 */
-#ifdef CONFIG_BOARD_TYPE_FULL_FUNCTION
-	s3c_irqwake_eintmask &=~(0x1 << 26);//enable IRQ26
-#else
-	s3c_irqwake_eintmask &=~(0x1 << 27);//enable IRQ27
-#endif
-	/* end add */
-#endif
-
-
-#if defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-
-	/* add by cym 20140812 */
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)
-	s3c_irqwake_eintmask &=~(0x1 << 22);//enable IRQ22
-#else
-	s3c_irqwake_eintmask &=~(0x1 << 26);//enable IRQ26
-#endif
-	/* end add */
-#endif
-
-
-
 
 #endif
 	__raw_writel(s3c_irqwake_intmask, S5P_WAKEUP_MASK);
-	/* modify by cym 20130409 for MT6600 */
-#if 0
 	__raw_writel(s3c_irqwake_eintmask, S5P_EINT_WAKEUP_MASK);
-#else
-#if defined(CONFIG_MTK_COMBO_COMM) || defined(CONFIG_MTK_COMBO_COMM_MODULE)
-	__raw_writel(s3c_irqwake_eintmask|(0x30<<16), S5P_EINT_WAKEUP_MASK); //mask EINT20 and EINT21
-#else
-	__raw_writel(s3c_irqwake_eintmask, S5P_EINT_WAKEUP_MASK);
-#endif
-#endif
 }
 
 static inline void s3c_pm_arch_stop_clocks(void)

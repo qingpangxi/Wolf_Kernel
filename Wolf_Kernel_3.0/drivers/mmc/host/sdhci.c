@@ -27,18 +27,6 @@
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
 
-/* add by cym 20130328 */
-#if CONFIG_MTK_COMBO
-#include <linux/mmc/sdio.h>
-#define MMC2_SDIO_EXT_IRQ (1) /* use sdio ext irq or not */
-#endif
-
-#if MMC2_SDIO_EXT_IRQ
-#include <linux/gpio.h>
-#include <plat/gpio-cfg.h>
-#endif
-/* end add */
-
 #include "sdhci.h"
 #include"../core/core.h"
 
@@ -53,13 +41,6 @@
 #endif
 
 #define MAX_TUNING_LOOP 40
-
-/* add by cym 20130328 */
-#if MMC2_SDIO_EXT_IRQ
-#define MMC2_SDIO_EXT_IRQ_PIN ( EXYNOS4_GPX2(5) )
-static unsigned int mmc2_sdio_ext_irq = 0;
-#endif
-/* end add */
 
 static unsigned int debug_quirks = 0;
 
@@ -872,14 +853,6 @@ static void sdhci_set_transfer_mode(struct sdhci_host *host,
 	mode = SDHCI_TRNS_BLK_CNT_EN;
 	if (mmc_op_multi(cmd->opcode) || data->blocks > 1) {
 		mode |= SDHCI_TRNS_MULTI;
-	/* add by cym 20130328 */
-#if CONFIG_MTK_COMBO
-        if (SD_IO_RW_EXTENDED == cmd->opcode) {
-            /* SDHCI BUG: no need to send CMD12 after CMD53 */
-            goto skip_sdhci_auto_cmd;
-        }
-#endif
-	/* end add */
 
         	/* In the case of SDIO, the Auto CMD12 should be disabled in the
          	* host controller's register. The CMD12 is not supported for SDIO
@@ -901,13 +874,6 @@ static void sdhci_set_transfer_mode(struct sdhci_host *host,
 			mode |= SDHCI_TRNS_AUTO_CMD23;
 			sdhci_writel(host, host->mrq->sbc->arg, SDHCI_ARGUMENT2);
 		}
-
-		/* add by cym 20130328 */
-#if CONFIG_MTK_COMBO
-        skip_sdhci_auto_cmd: /* skip auto cmd12 and cmd23 */
-        	;
-#endif
-		/* end add */
 	}
 
 	if (data->flags & MMC_DATA_READ)
@@ -1519,41 +1485,6 @@ static int sdhci_get_ro(struct mmc_host *mmc)
 	return 0;
 }
 
-/* add by cym 20130328 */
-#if MMC2_SDIO_EXT_IRQ
-static irqreturn_t sdhci_sdio_ext_irq (int irq, void *dev_id)
-{
-    struct mmc_host *mmc = dev_id;
-
-    mmc_signal_sdio_irq(mmc);
-    return IRQ_HANDLED;
-}
-
-static void sdhci_setup_sdio_ext_irq (struct mmc_host *mmc)
-{
-    int ret;
-
-    if ((2 == mmc->index) && (0 == mmc2_sdio_ext_irq)) {
-        s3c_gpio_cfgpin(MMC2_SDIO_EXT_IRQ_PIN, S3C_GPIO_INPUT);
-        s3c_gpio_setpull(MMC2_SDIO_EXT_IRQ_PIN, S3C_GPIO_PULL_DOWN);
-
-        mmc2_sdio_ext_irq = gpio_to_irq(MMC2_SDIO_EXT_IRQ_PIN);
-//enable_irq_wake(mmc2_sdio_ext_irq);
-        ret = request_irq(mmc2_sdio_ext_irq, sdhci_sdio_ext_irq, IRQF_TRIGGER_LOW,
-                  "mmc2_sdio_ext_irq", mmc);
-        if (ret) {
-            printk(KERN_WARNING "request_irq(%d, 0x%p, IRQF_TRIGGER_LOW, NULL) fail(%d)!!\n",
-                mmc2_sdio_ext_irq, sdhci_sdio_ext_irq, ret);
-        }
-        else {
-            printk(KERN_INFO "%s: SDHCI controller using ext irq(%d) gpio(%d)\n",
-                mmc_hostname(mmc), mmc2_sdio_ext_irq, MMC2_SDIO_EXT_IRQ_PIN);
-        }
-    }
-}
-#endif
-/* end add */
-
 static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 {
 	struct sdhci_host *host;
@@ -1565,27 +1496,6 @@ static void sdhci_enable_sdio_irq(struct mmc_host *mmc, int enable)
 
 	if (host->flags & SDHCI_DEVICE_DEAD)
 		goto out;
-
-	/* add by cym 20130328 */
-#if MMC2_SDIO_EXT_IRQ
-    if (2 == mmc->index) {
-        if (enable) {
-            if (likely(0 != mmc2_sdio_ext_irq)) {
-//enable_irq_wake(mmc2_sdio_ext_irq);
-                enable_irq(mmc2_sdio_ext_irq);
-            }
-            else {
-                sdhci_setup_sdio_ext_irq(mmc);
-            }
-        }
-        else {
-            disable_irq_nosync(mmc2_sdio_ext_irq);
-//disable_irq_wake(mmc2_sdio_ext_irq);
-        }
-        goto out;
-    }
-#endif
-	/* end add */
 
 	if (enable)
 		sdhci_unmask_irqs(host, SDHCI_INT_CARD_INT);

@@ -36,23 +36,6 @@
 #define MAX_BUS_CLK	(1)
 void mmc_valid(u16 valid, struct mmc_host *host);
 
-/* add by cym 20130328 */
-#if CONFIG_MTK_COMBO
-/* skip do suspend for mmc2 host. But it would fail because clock is stopped
- * but NOT restored automatically after resume.
- */
-#define MMC2_SKIP_SUSPEND (0)
-
-/* Enable the following pm capabilities for mmc2 host for wlan suspend/resume:
- *  MMC_PM_KEEP_POWER
- *  MMC_PM_WAKE_SDIO_IRQ
- *  MMC_PM_IGNORE_PM_NOTIFY
- * It works on mldk4x12.
- */
-#define MMC2_DO_SUSPEND_KEEP_PWR (1)
-#endif
-/* end add */
-
 /**
  * struct sdhci_s3c - S3C SDHCI instance
  * @host: The SDHCI host created
@@ -683,27 +666,6 @@ static int __devinit sdhci_s3c_probe(struct platform_device *pdev)
 	if (pdata->host_caps)
 		host->mmc->caps |= pdata->host_caps;
 
-	/* add by cym 20130328 */
-#if MMC2_SKIP_SUSPEND
-    if (2 == host->mmc->index) {
-        /* to avoid redundant mmc_detect_change() called by mmc_pm_notify() */
-        printk(KERN_INFO "%s: set MMC_PM_IGNORE_PM_NOTIFY for %s pm_flags\n",
-            __func__, mmc_hostname(host->mmc));
-        host->mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
-    }
-#elif MMC2_DO_SUSPEND_KEEP_PWR
-    if (2 == host->mmc->index) {
-        /* to avoid redundant mmc_detect_change() called by mmc_pm_notify() */
-        printk(KERN_INFO "%s: set MMC_PM_IGNORE_PM_NOTIFY for %s pm_flags\n",
-            __func__, mmc_hostname(host->mmc));
-        host->mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
-        printk(KERN_INFO "%s: set MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ for %s pm_caps\n",
-            __func__, mmc_hostname(host->mmc));
-        host->mmc->pm_caps |= MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ;
-    }
-#endif
-	/* end add */
-
 	ret = sdhci_add_host(host);
 	if (ret) {
 		dev_err(dev, "sdhci_add_host() failed\n");
@@ -784,19 +746,6 @@ static int sdhci_s3c_suspend(struct platform_device *dev, pm_message_t pm)
 {
 	struct sdhci_host *host = platform_get_drvdata(dev);
 
-	/* add by cym 20130328 */
-#if MMC2_SKIP_SUSPEND
-    /* mmc2 is s3c_device_hsmmc3 */
-    if (2 == host->mmc->index) {
-        printk(KERN_INFO "skip %s for %s dev->id(%d)\n", __func__, mmc_hostname(host->mmc), dev->id);
-        return 0;
-    }
-    else {
-        printk(KERN_INFO "%s for %s dev->id(%d)\n", __func__, mmc_hostname(host->mmc), dev->id);
-    }
-#endif
-	/* end add */
-
 	sdhci_suspend_host(host, pm);
 	return 0;
 }
@@ -806,23 +755,7 @@ static int sdhci_s3c_resume(struct platform_device *dev)
 	struct sdhci_host *host = platform_get_drvdata(dev);
 	struct sdhci_s3c *sc = sdhci_priv(host);
 
-	/* add by cym 20130328 */
-#if MMC2_SKIP_SUSPEND
-    /* mmc2 is s3c_device_hsmmc3 */
-    if (2 == host->mmc->index) {
-        printk(KERN_INFO "skip %s for %s dev->id(%d)\n", __func__, mmc_hostname(host->mmc), dev->id);
-        return 0;
-    }
-    else {
-        printk(KERN_INFO "%s for %s dev->id(%d)\n", __func__, mmc_hostname(host->mmc), dev->id);
-    }
-#endif
-	/* end add */
-
 	sdhci_resume_host(host);
-/* add by cym 20130328 */
-#ifndef MMC2_SKIP_SUSPEND
-/* end add */
 	if(!(host->mmc->caps & MMC_CAP_NONREMOVABLE)){//lisw hotplug during suspend
 		int status = gpio_get_value(sc->ext_cd_gpio);
 		if (sc->pdata->ext_cd_gpio_invert)
@@ -830,9 +763,6 @@ static int sdhci_s3c_resume(struct platform_device *dev)
 		sdhci_s3c_notify_change(sc->pdev, status);
 
 	}
-/* add by cym 20130328 */
-#endif
-/* end add */
 	return 0;
 }
 

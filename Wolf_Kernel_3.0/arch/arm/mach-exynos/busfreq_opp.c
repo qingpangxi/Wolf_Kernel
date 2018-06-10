@@ -43,13 +43,6 @@
 #include <mach/dev.h>
 #include <mach/busfreq_exynos4.h>
 
-/* add by cym 20130318 for 4412 SCP */
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-
-#include <mach/smc.h>
-#endif
-/* end add */
-
 #include <plat/map-s5p.h>
 #include <plat/cpu.h>
 #include <plat/clock.h>
@@ -144,19 +137,8 @@ static unsigned int _target(struct busfreq_data *data, struct opp *new)
 		if (data->busfreq_prepare)
 			data->busfreq_prepare(index);
 	}
-	/* modify by cym 20120318 for 4412 SCP */
-#if 0
+
 	data->target(index);
-#else
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-
-
-	;
-#else
-	data->target(index);
-#endif
-#endif
 
 	if (newfreq < currfreq) {
 		if (data->busfreq_post)
@@ -382,42 +364,13 @@ static __devinit int exynos_busfreq_probe(struct platform_device *pdev)
 	struct busfreq_data *data;
 	unsigned int val;
 
-	/* modify by cym 20130318 for 4412 SCP */
-#if 0
 	val = __raw_readl(S5P_VA_DMC0 + 0x4);
 	val = (val >> 8) & 0xf;
-#else
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-	bool pop = true;
-#ifdef CONFIG_ARM_TRUSTZONE
-	exynos_smc_readsfr(EXYNOS4_PA_DMC0_4212 + 0x4, &val);
-#else
-	val = __raw_readl(S5P_VA_DMC0 + 0x4);
-#endif
-#else
-	val = __raw_readl(S5P_VA_DMC0 + 0x4);
-	val = (val >> 8) & 0xf;
-#endif
-#endif
-	/* end modify */
 
 	/* Check Memory Type Only support -> 0x5: 0xLPDDR2 */
 	if (val != 0x05) {
 		pr_err("[ %x ] Memory Type Undertermined.\n", val);
-		/* modify by cym 20130318 for 4412 SCP */
-#if 0
 		return -ENODEV;
-#else
-
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-
-		pop = false;
-#else
-		return -ENODEV;
-#endif
-#endif
-		/* end modify */
 	}
 
 	data = kzalloc(sizeof(struct busfreq_data), GFP_KERNEL);

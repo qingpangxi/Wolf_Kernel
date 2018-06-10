@@ -37,16 +37,11 @@ static int process_sdio_pending_irqs(struct mmc_card *card)
 	 * Optimization, if there is only 1 function interrupt registered
 	 * call irq handler directly
 	 */
-	 /* add by cym 20130328 */
-#if !defined(CONFIG_MTK_COMBO_WIFI) && !defined(CONFIG_MTK_COMBO_WIFI_MODULE)
-	/* end add */
 	func = card->sdio_single_irq;
 	if (func) {
 		func->irq_handler(func);
 		return 1;
 	}
-#endif
-	/* end add */
 
 	ret = mmc_io_rw_direct(card, 0, 0, SDIO_CCCR_INTx, 0, &pending);
 	if (ret) {

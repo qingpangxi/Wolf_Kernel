@@ -19,24 +19,6 @@
 
 #define LOOP_CNT			10
 
-/* modify by cym 20130318 for 4412 SCP */
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-#define MIF_LOCK_FLAG			0
-#define INT_LOCK_FLAG			1
-#define G3D_LOCK_FLAG			2
-#define ARM_LOCK_FLAG			3
-
-extern unsigned int exynos_result_of_asv;
-extern unsigned int exynos_special_flag;
-extern bool exynos_dynamic_ema;
-
-static inline unsigned int is_special_flag(void)
-{
-	return exynos_special_flag;
-}
-#endif
-/* end modify */
-
 extern unsigned int exynos_result_of_asv;
 
 enum exynos4x12_abb_member {
@@ -71,13 +53,6 @@ static inline void exynos4x12_set_abb(unsigned int abb_mode_value)
 		tmp = S5P_ABB_INIT_BYPASS;
 
 	tmp |= abb_mode_value;
-	
-	printk("%s:0x%x, 0x%x, 0x%x, 0x%x, 0x%x\n", __FUNCTION__,
-                        __raw_readl(S5P_ABB_INT),
-                        __raw_readl(S5P_ABB_MIF),
-                        __raw_readl(S5P_ABB_G3D),
-                        __raw_readl(S5P_ABB_ARM),
-                        tmp);
 
 	__raw_writel(tmp, S5P_ABB_INT);
 	__raw_writel(tmp, S5P_ABB_MIF);

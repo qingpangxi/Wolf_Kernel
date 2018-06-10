@@ -19,7 +19,7 @@
  */
 
 #define ACM_TTY_MAJOR		166
-#define ACM_TTY_MINORS		4//32
+#define ACM_TTY_MINORS		32
 
 /*
  * Requests.
@@ -60,14 +60,13 @@
  * powers of 2.
  */
 #define ACM_NW  16
-#define ACM_NR  1//16
+#define ACM_NR  16
 
 struct acm_wb {
 	unsigned char *buf;
 	dma_addr_t dmah;
 	int len;
 	int use;
-	int submitted;
 	struct urb		*urb;
 	struct acm		*instance;
 };
@@ -81,7 +80,6 @@ struct acm_rb {
 };
 
 struct acm {
-	struct acm *parent;	
 	struct usb_device *dev;				/* the corresponding usb device */
 	struct usb_interface *control;			/* control interface */
 	struct usb_interface *data;			/* data interface */
@@ -102,12 +100,9 @@ struct acm {
 	int write_used;					/* number of non-empty write buffers */
 	int transmitting;
 	spinlock_t write_lock;
-	struct delayed_work	pm_runtime_work;/*work to enable runtime pm*/
 	struct mutex mutex;
 	struct usb_cdc_line_coding line;		/* bits, stop, parity */
 	struct work_struct work;			/* work queue entry for line discipline waking up */
-	unsigned int  dpm_suspending;
-	unsigned int  suspended;
 	unsigned int ctrlin;				/* input control lines (DCD, DSR, RI, break, overruns) */
 	unsigned int ctrlout;				/* output control lines (DTR, RTS) */
 	unsigned int writesize;				/* max packet size for the output bulk endpoint */
@@ -122,17 +117,6 @@ struct acm {
 	unsigned int throttle_req:1;			/* throttle requested */
 	u8 bInterval;
 	struct acm_wb *delayed_wb;			/* write queued for a device about to be woken */
-	unsigned int  skip_hostwakeup;
-	unsigned int  resume_debug;
-	unsigned int  usb_connected;
-	struct work_struct post_resume_work;
-	struct work_struct net_write_worker;
-	struct workqueue_struct *tx_workqueue;
-#ifdef CONFIG_HAS_WAKELOCK
-	struct wake_lock 	pm_lock;
-	struct wake_lock 	dormancy_lock;
-	long 			wake_time;
-#endif	
 };
 
 #define CDC_DATA_INTERFACE_TYPE	0x0a

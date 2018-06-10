@@ -25,12 +25,6 @@
 
 static struct samsung_asv *exynos_asv;
 unsigned int exynos_result_of_asv;
-/* add by cym 20130318 for 4412 SCP */
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER) || defined(CONFIG_CPU_TYPE_POP2G_ELITE) || defined(CONFIG_CPU_TYPE_POP2G_SUPPER)
-unsigned int exynos_special_flag;
-bool exynos_dynamic_ema;
-#endif
-/* end add */
 
 static int __init exynos4_asv_init(void)
 {
@@ -42,21 +36,8 @@ static int __init exynos4_asv_init(void)
 
 	if (soc_is_exynos4210())
 		ret = exynos4210_asv_init(exynos_asv);
-	else if (soc_is_exynos4412() || soc_is_exynos4212()) {
+	else if (soc_is_exynos4412() || soc_is_exynos4212())
 		ret = exynos4x12_asv_init(exynos_asv);
-
-		/* add by cym 20130710 */
-#if defined(CONFIG_CPU_TYPE_SCP_ELITE) || defined(CONFIG_CPU_TYPE_SCP_SUPPER)
-		/*
-		* If return value is not zero,
-		* There is already value for asv group.	
-		* So, It is not necessary to execute for getting asv group.
-		*/
-		if (ret)
-			return 0;
-#endif
-		/* end add */
-	}
 	else {
 		pr_info("EXYNOS: There is no type for ASV\n");
 		goto out2;
